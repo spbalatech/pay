@@ -217,12 +217,30 @@ is what flagged our auto-accept behaviour as contrary to PayPal's guidance. Two
 commits exist because of it. The app itself ships no PayPal SDK — it talks to the
 REST API through its own client.
 
-**Not used: PayPal's MCP server.** Worth stating plainly rather than leaving to
-inference. We call the REST API directly because it reaches further than the MCP
-server exposes — ten API families including disputes, transaction search, shipment
-tracking and webhook management — and because the MCP endpoint returned 404 on every
-documented path from this account during the build. Adding it to tick a box would
-have been the bolted-on integration PayPal warned against.
+**PayPal's MCP server (`@paypal/mcp`)** — a selectable transport, not a decoration.
+Aegis reaches PayPal either through its own REST client or through PayPal's official
+MCP server, chosen by `AEGIS_PAYPAL_TRANSPORT`. Both external dependencies in the
+system are swappable the same way: the model is Claude or a local Llama, the PayPal
+transport is REST or MCP.
+
+The server is launched over stdio and handed the bearer token the REST client already
+caches, rather than minting a second one. `npm run mcp:check` connects, lists the 28
+tools, and makes real sandbox calls — `list_disputes` and `create_invoice` both
+return live results, and the same invoice is created either way.
+
+Two things we learned doing it, both worth knowing if you try this:
+
+- **The MCP tool schemas are not the REST bodies.** `create_invoice` flattens
+  `detail.currency_code` to the top level, so posting a REST payload fails validation.
+  Take the schemas from `tools/list`, not from the REST reference.
+- **The hosted endpoint was unreachable for us.** `mcp.sandbox.paypal.com` returned
+  404 on `/mcp`, `/http` and `/sse` throughout the build, so the local stdio server is
+  what we integrated against. Same official package, same tools.
+
+REST remains the default because it reaches further: transaction search, webhook
+registration and signature verification, and shipment tracker updates have no MCP
+tool at all. The transport routes the five operations PayPal's MCP server actually
+exposes and leaves the rest on REST, rather than pretending the coverage is equal.
 
 **AG Grid Enterprise** — the three operator queues. Row grouping by the unit each
 queue is actually worked in (risk tier, precursor type, dispute reason code, audit

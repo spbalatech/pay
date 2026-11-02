@@ -23,6 +23,11 @@ const schema = z.object({
   PAYPAL_CLIENT_SECRET: optionalStr(),
   PAYPAL_ENVIRONMENT: z.enum(["SANDBOX", "PRODUCTION"]).default("SANDBOX"),
   PAYPAL_SANDBOX_BUYER_EMAIL: z.preprocess((v) => (typeof v === "string" && v.trim() === "" ? undefined : v), z.string().email().optional()),
+
+  // How Aegis reaches PayPal. "rest" is its own client; "mcp" routes the
+  // supported operations through PayPal's official MCP server (@paypal/mcp),
+  // launched over stdio. Both hit the same PayPal APIs.
+  AEGIS_PAYPAL_TRANSPORT: z.enum(["rest", "mcp"]).default("rest"),
   // Which model provider to use. "auto" prefers Anthropic when a key is set
   // and falls back to a local Ollama server when one is running.
   AEGIS_AI_PROVIDER: z.enum(["auto", "anthropic", "ollama", "none"]).default("auto"),

@@ -80,6 +80,26 @@ A rebuttal always needs a human: it goes out in the merchant's name.
 
 All calls go through one client with token caching, idempotency keys on writes, and backoff on 429/5xx: [`src/lib/paypal/client.ts`](src/lib/paypal/client.ts).
 
+### Two transports
+
+Aegis reaches PayPal through its own REST client **or** through PayPal's official MCP
+server (`@paypal/mcp`), selected by `AEGIS_PAYPAL_TRANSPORT=rest|mcp`. The MCP server
+is launched over stdio and handed the token the REST client already caches.
+
+```bash
+npm run mcp:check    # connect, list the 28 tools, make real sandbox calls
+```
+
+Five operations route either way — `list_disputes`, `get_dispute`, `create_refund`,
+`create_invoice`, `list_transactions` ([`src/lib/paypal/transport.ts`](src/lib/paypal/transport.ts)).
+REST stays the default because it reaches further: transaction search, webhook
+registration and signature verification, and tracker updates have no MCP tool, so the
+transport routes what the MCP server exposes and leaves the rest on REST rather than
+implying equal coverage.
+
+Note that the MCP tool schemas are **not** the REST bodies — `create_invoice` flattens
+`detail.currency_code` to the top level. Read the schemas from `tools/list`.
+
 ## Webhooks
 
 `POST /api/webhooks/paypal` is how a production dispute reaches Aegis. It follows PayPal's integration guidance exactly:

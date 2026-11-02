@@ -16,10 +16,12 @@
     "agents:run": "tsx scripts/run-agents.ts",
     "ai:check": "tsx scripts/ai-check.ts",
     "paypal:check": "tsx scripts/paypal-check.ts",
-    "webhook": "tsx scripts/webhook.ts"
+    "webhook": "tsx scripts/webhook.ts",
+    "mcp:check": "tsx scripts/mcp-check.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.32.1",
+    "@modelcontextprotocol/sdk": "^1.32.2",
     "@prisma/client": "5.22.0",
     "ag-grid-community": "32.3.3",
     "ag-grid-enterprise": "32.3.3",

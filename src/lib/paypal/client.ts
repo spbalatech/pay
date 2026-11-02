@@ -143,3 +143,10 @@ export async function paypal<T>(path: string, opts: RequestOptions = {}): Promis
 }
 
 export const paypalEnvironment = () => env().PAYPAL_ENVIRONMENT;
+
+/**
+ * The cached bearer token, for consumers that need to hand it to something
+ * else - PayPal's MCP server takes PAYPAL_ACCESS_TOKEN rather than a client
+ * id and secret, so it reuses this rather than minting a second one.
+ */
+export const currentAccessToken = () => accessToken();
