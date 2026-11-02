@@ -1,4 +1,4 @@
-import { paypal } from "./client";
+import { paypal, PayPalError } from "./client";
 import { randomUUID } from "node:crypto";
 
 /* ------------------------------------------------------------------ orders */
@@ -194,6 +194,17 @@ export type PayPalTransaction = {
  * Transaction search is the Sentinel's main history source. PayPal caps each
  * request to a 31-day window, so callers hand us a range and we page it.
  */
+export class TransactionSearchDisabled extends Error {
+  constructor(cause: string) {
+    super(
+      "Transaction Search is not enabled on this PayPal app. Enable it under " +
+        "Apps & Credentials > your app > Features > Transaction search, then wait a few " +
+        `minutes. (${cause})`,
+    );
+    this.name = "TransactionSearchDisabled";
+  }
+}
+
 export async function listTransactions(startDate: Date, endDate: Date) {
   const all: PayPalTransaction[] = [];
   let cursor = new Date(startDate);
@@ -203,22 +214,29 @@ export async function listTransactions(startDate: Date, endDate: Date) {
     let page = 1;
 
     for (;;) {
-      const res = await paypal<{
-        transaction_details?: PayPalTransaction[];
-        total_pages?: number;
-      }>("/v1/reporting/transactions", {
-        query: {
-          start_date: cursor.toISOString(),
-          end_date: windowEnd.toISOString(),
-          fields: "transaction_info,payer_info",
-          page_size: 100,
-          page,
-        },
-      });
+      try {
+        const res = await paypal<{
+          transaction_details?: PayPalTransaction[];
+          total_pages?: number;
+        }>("/v1/reporting/transactions", {
+          query: {
+            start_date: cursor.toISOString(),
+            end_date: windowEnd.toISOString(),
+            fields: "transaction_info,payer_info",
+            page_size: 100,
+            page,
+          },
+        });
 
-      all.push(...(res.transaction_details ?? []));
-      if (!res.total_pages || page >= res.total_pages) break;
-      page++;
+        all.push(...(res.transaction_details ?? []));
+        if (!res.total_pages || page >= res.total_pages) break;
+        page++;
+      } catch (err) {
+        if (err instanceof PayPalError && err.status === 403) {
+          throw new TransactionSearchDisabled(err.body.replace(/\s+/g, " ").slice(0, 120));
+        }
+        throw err;
+      }
     }
 
     cursor = new Date(windowEnd.getTime() + 1000);
@@ -287,15 +305,23 @@ export type PayPalInvoice = {
   primary_recipients?: Array<{ billing_info?: { email_address?: string } }>;
 };
 
-export function createInvoice(input: {
+/**
+ * Creates a draft invoice.
+ *
+ * Note: this endpoint does NOT return the invoice. It returns a link object
+ * ({rel, href, method}) whose href ends in the new invoice id, so the id is
+ * parsed out and the invoice fetched. Reading `.id` off the POST response
+ * silently yields undefined.
+ */
+export async function createInvoice(input: {
   recipientEmail: string;
   amount: string;
   currency?: string;
   itemName: string;
   dueDate?: string;
-}) {
+}): Promise<PayPalInvoice> {
   const currency = input.currency ?? "USD";
-  return paypal<PayPalInvoice>("/v2/invoicing/invoices", {
+  const created = await paypal<PayPalInvoice & { href?: string }>("/v2/invoicing/invoices", {
     method: "POST",
     idempotencyKey: randomUUID(),
     body: {
@@ -315,7 +341,16 @@ export function createInvoice(input: {
       ],
     },
   });
+
+  if (created.id) return created;
+
+  const id = created.href?.split("/").filter(Boolean).pop();
+  if (!id) throw new Error(`Invoice created but no id could be resolved from ${JSON.stringify(created)}`);
+
+  return getInvoice(id);
 }
+
+export const getInvoice = (id: string) => paypal<PayPalInvoice>(`/v2/invoicing/invoices/${id}`);
 
 export const sendInvoice = (id: string) =>
   paypal<{ href?: string }>(`/v2/invoicing/invoices/${id}/send`, {

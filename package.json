@@ -13,7 +13,9 @@
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
     "seed": "tsx scripts/seed.ts",
-    "agents:run": "tsx scripts/run-agents.ts"
+    "agents:run": "tsx scripts/run-agents.ts",
+    "ai:check": "tsx scripts/ai-check.ts",
+    "paypal:check": "tsx scripts/paypal-check.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.32.1",

@@ -12,13 +12,16 @@
  * out of nothing, and it cannot write one the merchant has not sanctioned.
  */
 import { db, audit } from "@/lib/db";
-import { generateStructured } from "@/lib/ai/claude";
-import { hasAI } from "@/lib/env";
+import { generateStructured, aiStatus } from "@/lib/ai";
 import { PREDICATE_FIELDS, RULE_ACTIONS, type RuleCondition } from "./rules";
 import { DISPUTE_FEE_USD } from "./ev";
 import { z } from "zod";
 
 const MIN_CLUSTER = 3; // never generalise from fewer than three losses
+
+/** The seeder and collectLossPatterns both look back ~90 days. */
+const HISTORY_WINDOW_DAYS = 90;
+const QUARTER_DAYS = 91;
 
 const predicateSchema = z.object({
   field: z.enum(PREDICATE_FIELDS as [string, ...string[]]),
@@ -32,8 +35,7 @@ const proposalSchema = z.object({
       plainEnglish: z.string().min(20),
       condition: z.object({ all: z.array(predicateSchema).min(1).max(4) }),
       action: z.enum(RULE_ACTIONS),
-      citedDisputeIds: z.array(z.string()).min(MIN_CLUSTER),
-      projectedDisputesAvoidedPerQuarter: z.number().int().min(0).max(200),
+      citedDisputes: z.array(z.string()).min(MIN_CLUSTER),
       reasoning: z.string(),
     }),
   ),
@@ -71,15 +73,15 @@ const PROPOSAL_JSON_SCHEMA = {
             required: ["all"],
           },
           action: { type: "string", enum: RULE_ACTIONS },
-          citedDisputeIds: {
+          citedDisputes: {
             type: "array",
             items: { type: "string" },
-            description: "Aegis dispute ids from the input that this rule would have prevented. At least 3.",
+            description:
+              "The short labels (D1, D2, …) of the disputes this rule would have prevented. At least 3, copied exactly from the input.",
           },
-          projectedDisputesAvoidedPerQuarter: { type: "integer" },
           reasoning: { type: "string" },
         },
-        required: ["plainEnglish", "condition", "action", "citedDisputeIds", "projectedDisputesAvoidedPerQuarter", "reasoning"],
+        required: ["plainEnglish", "condition", "action", "citedDisputes", "reasoning"],
       },
     },
   },
@@ -91,12 +93,17 @@ const SYSTEM = `You find the repeated patterns behind a merchant's chargebacks a
 You are given resolved disputes, each with its order's attributes. Propose at most 3 rules.
 
 Hard constraints:
-- Only propose a rule when at least ${MIN_CLUSTER} of the given disputes share the pattern. Cite their ids.
+- Only propose a rule when at least ${MIN_CLUSTER} of the given disputes share the pattern. Cite their labels (D1, D2, …) exactly as given.
 - Conditions may only use the listed fields, operators and actions. Nothing else exists.
 - Prefer one narrow rule over one broad rule. A rule that holds every order is useless.
 - Thresholds must be round, defensible numbers a merchant would choose ($150, not $147.32).
 - plainEnglish must state the condition and the action, and must match the machine condition exactly.
-- If no pattern reaches ${MIN_CLUSTER} disputes, return an empty proposals array. Saying "not yet" is correct and expected.`;
+- If no pattern reaches ${MIN_CLUSTER} disputes, return an empty proposals array. Saying "not yet" is correct and expected.
+
+Before concluding that no pattern exists, check each dimension in turn and count how many disputes share each value:
+reason code · order amount band · multi-unit shipping address · signature on delivery · tracking present ·
+billing/shipping country mismatch · payer's prior order count.
+A dimension where ${MIN_CLUSTER} or more of the losses agree IS a pattern, and you should propose a rule for it.`;
 
 export type LossPattern = {
   disputeId: string;
@@ -152,11 +159,9 @@ export async function collectLossPatterns(): Promise<LossPattern[]> {
 }
 
 export async function proposeRules() {
-  if (!hasAI()) {
-    return {
-      proposed: [],
-      reason: "ANTHROPIC_API_KEY is not set, so no rules can be proposed yet. Everything else runs.",
-    };
+  const ai = await aiStatus();
+  if (!ai.available) {
+    return { proposed: [], reason: `${ai.hint} Everything else runs.` };
   }
 
   const patterns = await collectLossPatterns();
@@ -169,6 +174,12 @@ export async function proposeRules() {
     where: { status: { in: ["ACTIVE", "PROPOSED"] } },
     select: { plainEnglish: true },
   });
+
+  // Disputes are presented as D1, D2, … rather than by their 25-character
+  // cuid. A citation the model cannot copy accurately is a citation the guard
+  // below throws away, which silently costs real rules.
+  const labelled = patterns.map((p, i) => ({ label: `D${i + 1}`, pattern: p }));
+  const byLabel = new Map(labelled.map((l) => [l.label, l.pattern]));
 
   const result = await generateStructured({
     system: SYSTEM,
@@ -183,10 +194,10 @@ export async function proposeRules() {
       `Rules that already exist (do not duplicate these):\n` +
       (existing.length ? existing.map((r) => `- ${r.plainEnglish}`).join("\n") : "- none") +
       `\n\nResolved losses (${patterns.length}):\n` +
-      patterns
+      labelled
         .map(
-          (p) =>
-            `- id=${p.disputeId} ${p.reasonCode} $${p.amount.toFixed(2)} outcome=${p.outcome} ` +
+          ({ label, pattern: p }) =>
+            `- ${label}: ${p.reasonCode} $${p.amount.toFixed(2)} outcome=${p.outcome} ` +
             `orderAmount=${p.orderAmount ?? "?"} multiUnit=${p.shippingIsMultiUnit} rush=${p.rushShipping} ` +
             `countryMismatch=${p.countryMismatch} payerPriorOrders=${p.payerOrderCount} ` +
             `tracking=${p.hadTracking} signature=${p.hadSignature} delivered=${p.hadDelivery}`,
@@ -195,17 +206,29 @@ export async function proposeRules() {
       `\n\nPropose prevention rules.`,
   });
 
-  const byId = new Map(patterns.map((p) => [p.disputeId, p]));
   const created = [];
+  const rejected: string[] = [];
 
   for (const proposal of result.proposals) {
     // Reject anything citing a dispute we did not supply: a rule has to be
     // traceable to real losses or it is just a guess with a citation.
-    const cited = proposal.citedDisputeIds.filter((id) => byId.has(id));
-    if (cited.length < MIN_CLUSTER) continue;
+    const citedLabels = proposal.citedDisputes.filter((l) => byLabel.has(l.trim()));
+    if (citedLabels.length < MIN_CLUSTER) {
+      rejected.push(
+        `"${proposal.plainEnglish.slice(0, 60)}…" cited ${citedLabels.length}/${MIN_CLUSTER} valid disputes`,
+      );
+      continue;
+    }
 
-    const avgLoss = cited.reduce((s, id) => s + (byId.get(id)!.amount + DISPUTE_FEE_USD), 0) / cited.length;
-    const projectedSavings = avgLoss * proposal.projectedDisputesAvoidedPerQuarter;
+    const cited = citedLabels.map((l) => byLabel.get(l.trim())!.disputeId);
+    const losses = citedLabels.map((l) => byLabel.get(l.trim())!);
+
+    // Derived, not guessed. These disputes actually happened inside the
+    // history window, so the count IS the observed rate - models estimate
+    // this badly, and a projection a merchant cannot trace is worthless.
+    const avoided = Math.round(cited.length * (QUARTER_DAYS / HISTORY_WINDOW_DAYS));
+    const projectedSavings = losses.reduce((s, p) => s + p.amount + DISPUTE_FEE_USD, 0) *
+      (QUARTER_DAYS / HISTORY_WINDOW_DAYS);
 
     const rule = await db.rule.create({
       data: {
@@ -214,7 +237,7 @@ export async function proposeRules() {
         action: proposal.action,
         status: "PROPOSED",
         derivedFrom: { disputeIds: cited, reasoning: proposal.reasoning },
-        projectedDisputesAvoided: proposal.projectedDisputesAvoidedPerQuarter,
+        projectedDisputesAvoided: avoided,
         projectedSavings,
       },
     });
@@ -228,7 +251,15 @@ export async function proposeRules() {
     created.push(rule);
   }
 
-  return { proposed: created, reason: null };
+  // A silent zero is indistinguishable from a bug. Always say which it was.
+  const reason =
+    created.length > 0
+      ? null
+      : rejected.length > 0
+        ? `Model returned ${result.proposals.length} proposal(s), all rejected: ${rejected.join("; ")}.`
+        : `No pattern reached ${MIN_CLUSTER} shared disputes across ${patterns.length} resolved loss(es).`;
+
+  return { proposed: created, reason };
 }
 
 export async function approveRule(ruleId: string, actor: string) {

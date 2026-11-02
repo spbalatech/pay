@@ -96,13 +96,15 @@ npm run agents:run       # one full pass of the loop
 npm run dev              # console at http://localhost:3000
 ```
 
-Only `DATABASE_URL` is required to start:
+Only `DATABASE_URL` is required to start. For the model, use **either** an Anthropic key **or** a local Ollama — see *AI tools used* below:
 
 ```
 DATABASE_URL=postgresql://aegis:aegis@localhost:55439/aegis
 PAYPAL_CLIENT_ID=          # optional — sandbox app credentials
 PAYPAL_CLIENT_SECRET=      # optional
-ANTHROPIC_API_KEY=         # optional
+AEGIS_AI_PROVIDER=auto     # auto | anthropic | ollama | none
+ANTHROPIC_API_KEY=         # optional, for the hosted path
+OLLAMA_MODEL=llama3.1:8b   # optional, for the local path
 ```
 
 ### Running without credentials
@@ -115,7 +117,7 @@ history without calling PayPal, and the console names what is switched off.
 | Missing | What still works | What stops |
 |---|---|---|
 | PayPal credentials | Everything in the console; all four agents; the full offline seeder | Live sandbox writes — real orders, invoices, refunds, accept-claim, tracking |
-| `ANTHROPIC_API_KEY` | Sentinel, Interceptor and Advocate in full — their scores and expected values are arithmetic, not model output | The Learner proposes no rules; narratives and drafted messages fall back to plain summaries |
+| No model provider | Sentinel, Interceptor and Advocate in full — their scores and expected values are arithmetic, not model output | The Learner proposes no rules; narratives and drafted messages fall back to plain summaries |
 | Both | Risk scoring, precursor detection, EV decisions, the whole UI | As above |
 
 That the first three agents keep working without a model is not a fallback —
@@ -139,7 +141,7 @@ The seeder deliberately plants one recurring loss shape — high-value orders to
 ```
 prisma/schema.prisma      data model; `source` on every externally-derived row
 src/lib/paypal/           REST client + typed API surface
-src/lib/ai/claude.ts      text and schema-forced structured generation
+src/lib/ai/               provider layer: Anthropic and local Ollama behind one interface
 src/agents/signals.ts     deterministic risk signals (no model)
 src/agents/ev.ts          expected-value engine + evidence checklists (no model)
 src/agents/rules.ts       closed predicate language for prevention rules
@@ -154,7 +156,19 @@ scripts/run-agents.ts     one pass of the full loop
 
 ## AI tools used
 
-- **Claude** (`claude-opus-5` for reasoning and drafting, `claude-haiku-5-5` for high-volume explanation passes) via the Anthropic SDK. Structured outputs use a forced tool call so a malformed response fails loudly instead of being parsed out of prose.
+Aegis runs against **either a hosted Claude model or a local model, interchangeably**. Set `AEGIS_AI_PROVIDER`; `npm run ai:check` reports what is configured and does a round trip.
+
+| Provider | Setting | Notes |
+|---|---|---|
+| **Anthropic** | `anthropic` | `claude-opus-5` for reasoning and drafting, `claude-haiku-5-5` for high-volume explanation passes. Structured output uses a **forced tool call**, so a malformed response fails loudly instead of being parsed out of prose. |
+| **Ollama (local)** | `ollama` | Any instruct model. Structured output uses Ollama's `format` parameter, which **constrains decoding to the JSON Schema** rather than asking politely for JSON, so small models stay on-schema. No API key, no network. |
+| auto | `auto` (default) | Prefers Anthropic when a key is set, falls back to a reachable local Ollama. |
+
+Both implement one interface ([`src/lib/ai/types.ts`](src/lib/ai/types.ts)); the agents never know which is in use.
+
+**Verified on a local 4B model.** The Learner — the hardest job, since it must emit a schema-valid rule citing at least three real disputes — proposes the correct prevention rule running entirely offline on `qwen3-vl:4b-instruct`. Smaller models tend to return an empty proposal list rather than a wrong one, which is the safe failure.
+
+Only two jobs use a model at all: drafting (narratives, buyer outreach, rebuttals) and rule proposal. Every score and every expected value is arithmetic.
 
 ## License
 

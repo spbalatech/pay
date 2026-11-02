@@ -14,7 +14,7 @@
  */
 import { db, audit } from "@/lib/db";
 import { policy } from "@/lib/env";
-import { generate } from "@/lib/ai/claude";
+import { generate } from "@/lib/ai";
 import { createRefund } from "@/lib/paypal/api";
 import { DISPUTE_FEE_USD } from "./ev";
 import type { Order, Shipment, Subscription } from "@prisma/client";

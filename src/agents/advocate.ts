@@ -9,7 +9,7 @@
  */
 import { db, audit } from "@/lib/db";
 import { policy } from "@/lib/env";
-import { generate } from "@/lib/ai/claude";
+import { generate } from "@/lib/ai";
 import { acceptDisputeClaim } from "@/lib/paypal/api";
 import {
   checklistFor,

@@ -13,8 +13,10 @@ datasource db {
 }
 
 enum DataSource {
-  LIVE_SANDBOX // read back from the PayPal sandbox API
-  SIMULATED    // injected fixture; the sandbox cannot originate these
+  LIVE_SANDBOX    // created at PayPal and fully real, retrievable by id
+  LIVE_UNCAPTURED // the object exists at PayPal, but payment capture needs
+                  // browser approval, so the capture id is locally generated
+  SIMULATED       // injected fixture; the sandbox cannot originate these
 }
 
 enum RiskTier {

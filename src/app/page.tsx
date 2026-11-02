@@ -4,11 +4,13 @@ import { Hero, Tile, SegmentedBar, money, pct } from "@/components/Tiles";
 import { RunLoopButton } from "@/components/RunLoopButton";
 import { db } from "@/lib/db";
 import { capabilities } from "@/lib/env";
+import { aiStatus } from "@/lib/ai";
 
 export const dynamic = "force-dynamic";
 
 export default async function Overview() {
   const caps = capabilities();
+  const ai = await aiStatus();
   let m: Awaited<ReturnType<typeof dashboardMetrics>> | null = null;
   let simulatedShare: { total: number; simulated: number } | null = null;
 
@@ -48,17 +50,36 @@ npm run agents:run`}</pre>
         </p>
       </div>
 
-      {caps.missing.length > 0 ? (
+      {!caps.paypal || !ai.available ? (
         <div className="notice">
           <span aria-hidden>⚙</span>
           <span>
-            Running without {caps.missing.join(" and ")}. The console, the seeder and
-            {caps.ai ? " " : " three of "} the four agents work regardless
-            {caps.ai ? "" : " — only the Learner needs a model to propose rules"}. Add the
-            values to <code>.env</code> and restart to switch the rest on.
+            {!caps.paypal ? (
+              <>
+                No PayPal sandbox credentials, so live writes are off — everything else
+                runs on seeded data.{" "}
+              </>
+            ) : null}
+            {ai.available ? (
+              <>
+                Model provider: <strong>{ai.provider}</strong> ({ai.reasoning}).
+              </>
+            ) : (
+              <>
+                No model provider: {ai.hint} Sentinel, Interceptor and Advocate run
+                regardless — their scores are arithmetic. Only the Learner needs one.
+              </>
+            )}
           </span>
         </div>
-      ) : null}
+      ) : (
+        <div className="notice">
+          <span aria-hidden>✓</span>
+          <span>
+            PayPal sandbox connected · model provider <strong>{ai.provider}</strong> ({ai.reasoning}).
+          </span>
+        </div>
+      )}
 
       {simulatedShare && simulatedShare.simulated > 0 ? (
         <div className="notice">

@@ -158,9 +158,18 @@ async function main() {
     const real: PayPalOrder | null = await tryRealOrder(amount, items, buyer, street);
     if (real) realOrders++;
 
+    // An order created through the API is genuinely at PayPal and can be
+    // fetched by id, but it stays CREATED until a buyer approves it in a
+    // browser. So "the order is real" and "the payment is real" are different
+    // claims, and the row records which one holds.
     const captureFromReal = real?.purchase_units?.[0]?.payments?.captures?.[0]?.id;
     const captureId = captureFromReal ?? synthCaptureId();
-    const isReal = !!real && !!captureFromReal;
+    const provenance: "LIVE_SANDBOX" | "LIVE_UNCAPTURED" | "SIMULATED" = captureFromReal
+      ? "LIVE_SANDBOX"
+      : real
+        ? "LIVE_UNCAPTURED"
+        : "SIMULATED";
+    const isReal = provenance === "LIVE_SANDBOX";
 
     // Deliberately plant one recurring loss shape — high-value orders to
     // multi-unit addresses shipped without signature — so the Learner has a
@@ -185,7 +194,7 @@ async function main() {
         createdAt,
         capturedAt: new Date(createdAt.getTime() + between(1, 40) * 60_000),
         promiseDate: new Date(createdAt.getTime() + Math.floor(between(4, 9)) * DAY),
-        source: isReal ? "LIVE_SANDBOX" : "SIMULATED",
+        source: provenance,
       },
     });
 
@@ -198,7 +207,7 @@ async function main() {
         kind: "SALE",
         status: "COMPLETED",
         occurredAt: order.capturedAt!,
-        source: isReal ? "LIVE_SANDBOX" : "SIMULATED",
+        source: provenance,
       },
     });
 
@@ -234,7 +243,7 @@ async function main() {
           shippedAt,
           lastMovementAt,
           deliveredAt: delivered ? lastMovementAt : null,
-          source: isReal ? "LIVE_SANDBOX" : "SIMULATED",
+          source: provenance,
         },
       });
 
@@ -262,7 +271,11 @@ async function main() {
     });
   }
 
-  console.log(`orders: ${orderCount} (${realOrders} captured live in sandbox, rest marked SIMULATED)`);
+  console.log(
+    `orders: ${orderCount} — ${realOrders} created at PayPal with real order ids ` +
+      `(LIVE_UNCAPTURED: the capture id is local, since capture needs browser approval), ` +
+      `${orderCount - realOrders} fully SIMULATED`,
+  );
 
   /* ---- a duplicate charge for the Interceptor to catch ------------------ */
 
@@ -335,7 +348,7 @@ async function main() {
       },
     });
   }
-  console.log(`invoices: 6 (${realInvoices} created live in sandbox)`);
+  console.log(`invoices: 6 — ${realInvoices} created and sent at PayPal (LIVE_SANDBOX)`);
 
   /* ---- subscriptions, incl. a dormant renewal --------------------------- */
 

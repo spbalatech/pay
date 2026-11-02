@@ -10,14 +10,31 @@ import { z } from "zod";
  * `capabilities()` says what is switched off, and the console shows it rather
  * than failing at the first API call.
  */
+/**
+ * An empty value in a .env file (`ANTHROPIC_API_KEY=`) is present but blank.
+ * Treat it as absent, so commenting a credential out by clearing it works the
+ * way everyone expects instead of failing validation.
+ */
+const optionalStr = () =>
+  z.preprocess((v) => (typeof v === "string" && v.trim() === "" ? undefined : v), z.string().min(1).optional());
+
 const schema = z.object({
-  PAYPAL_CLIENT_ID: z.string().min(1).optional(),
-  PAYPAL_CLIENT_SECRET: z.string().min(1).optional(),
+  PAYPAL_CLIENT_ID: optionalStr(),
+  PAYPAL_CLIENT_SECRET: optionalStr(),
   PAYPAL_ENVIRONMENT: z.enum(["SANDBOX", "PRODUCTION"]).default("SANDBOX"),
-  PAYPAL_SANDBOX_BUYER_EMAIL: z.string().email().optional(),
-  ANTHROPIC_API_KEY: z.string().min(1).optional(),
+  PAYPAL_SANDBOX_BUYER_EMAIL: z.preprocess((v) => (typeof v === "string" && v.trim() === "" ? undefined : v), z.string().email().optional()),
+  // Which model provider to use. "auto" prefers Anthropic when a key is set
+  // and falls back to a local Ollama server when one is running.
+  AEGIS_AI_PROVIDER: z.enum(["auto", "anthropic", "ollama", "none"]).default("auto"),
+
+  ANTHROPIC_API_KEY: optionalStr(),
   AEGIS_MODEL_REASONING: z.string().default("claude-opus-5"),
   AEGIS_MODEL_FAST: z.string().default("claude-haiku-5-5"),
+
+  OLLAMA_BASE_URL: z.string().default("http://localhost:11434"),
+  OLLAMA_MODEL: z.string().default("llama3.1:8b"),
+  OLLAMA_MODEL_FAST: optionalStr(),
+  AEGIS_OLLAMA_TIMEOUT_MS: z.coerce.number().default(120_000),
   DATABASE_URL: z.string().min(1),
   AEGIS_AUTO_ACCEPT_CEILING_USD: z.coerce.number().default(35),
   AEGIS_AUTO_REFUND_CEILING_USD: z.coerce.number().default(25),
@@ -42,29 +59,30 @@ export function env(): Env {
 }
 
 /** Placeholders are treated as absent, so a half-filled .env fails honestly. */
-const real = (v: string | undefined) =>
+export const isRealSecret = (v: string | undefined) =>
   !!v && v.length > 8 && !/^(placeholder|changeme|your[-_]?|xxx|todo)/i.test(v);
 
 export type Capabilities = {
   paypal: boolean;
-  ai: boolean;
+  /** Sync best guess only - a local Ollama has to be probed, so the console
+   *  uses the async aiStatus() from @/lib/ai for the authoritative answer. */
+  aiConfigured: boolean;
   missing: string[];
 };
 
 export function capabilities(): Capabilities {
   const e = env();
-  const paypal = real(e.PAYPAL_CLIENT_ID) && real(e.PAYPAL_CLIENT_SECRET);
-  const ai = real(e.ANTHROPIC_API_KEY);
+  const paypal = isRealSecret(e.PAYPAL_CLIENT_ID) && isRealSecret(e.PAYPAL_CLIENT_SECRET);
+  const aiConfigured =
+    isRealSecret(e.ANTHROPIC_API_KEY) || e.AEGIS_AI_PROVIDER === "ollama" || e.AEGIS_AI_PROVIDER === "auto";
 
   const missing: string[] = [];
   if (!paypal) missing.push("PAYPAL_CLIENT_ID / PAYPAL_CLIENT_SECRET");
-  if (!ai) missing.push("ANTHROPIC_API_KEY");
 
-  return { paypal, ai, missing };
+  return { paypal, aiConfigured, missing };
 }
 
 export const hasPayPal = () => capabilities().paypal;
-export const hasAI = () => capabilities().ai;
 
 /** Autonomy limits the agents must respect. Humans own these numbers. */
 export function policy() {

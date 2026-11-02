@@ -42,12 +42,22 @@ export function RecommendationBadge(p: ICellRendererParams) {
 }
 
 export function SourceBadge(p: ICellRendererParams) {
-  if (p.value !== "SIMULATED") return null;
-  return (
-    <span className="badge badge-sim" title="Fixture: the PayPal sandbox cannot originate this record.">
-      simulated
-    </span>
-  );
+  if (p.value === "LIVE_UNCAPTURED")
+    return (
+      <span
+        className="badge badge-sim"
+        title="Created at PayPal and fetchable by id, but capture needs browser approval, so the capture id is local."
+      >
+        live order
+      </span>
+    );
+  if (p.value === "SIMULATED")
+    return (
+      <span className="badge badge-sim" title="Fixture: the PayPal sandbox cannot originate this record.">
+        simulated
+      </span>
+    );
+  return null;
 }
 
 /** Days until a dispute response deadline, with urgency as text, not hue. */
