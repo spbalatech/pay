@@ -1,0 +1,277 @@
+// Aegis data model.
+// One merchant per deployment; everything hangs off orders, which are the
+// unit the three agents share: Sentinel scores them, Interceptor watches
+// them, Advocate defends them, Learner reads the outcomes.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum DataSource {
+  LIVE_SANDBOX // read back from the PayPal sandbox API
+  SIMULATED    // injected fixture; the sandbox cannot originate these
+}
+
+enum RiskTier {
+  CLEAR
+  REVIEW
+  HOLD
+}
+
+enum WatchStatus {
+  OPEN
+  DEFLECTED
+  ESCALATED_TO_DISPUTE
+  DISMISSED
+}
+
+enum InterventionKind {
+  OUTREACH
+  TRACKING_RESEND
+  PREEMPTIVE_REFUND
+  SUBSCRIPTION_PAUSE
+  FULFILLMENT_HOLD
+}
+
+enum ApprovalStatus {
+  PROPOSED
+  AUTO_APPROVED
+  HUMAN_APPROVED
+  HUMAN_REJECTED
+  EXECUTED
+  FAILED
+}
+
+enum DisputeDecision {
+  UNDECIDED
+  FIGHT
+  ACCEPT
+}
+
+enum DisputeOutcome {
+  PENDING
+  WON
+  LOST
+  ACCEPTED
+}
+
+enum RuleStatus {
+  PROPOSED
+  ACTIVE
+  REJECTED
+  SUPERSEDED
+}
+
+model Order {
+  id              String   @id @default(cuid())
+  paypalOrderId   String   @unique
+  captureId       String?  // needed to issue refunds
+  payerId         String
+  payerEmail      String
+  amount          Decimal  @db.Decimal(12, 2)
+  currency        String   @default("USD")
+  status          String
+  billingCountry  String?
+  shippingCountry String?
+  shippingLine1   String?
+  shippingIsMultiUnit Boolean @default(false)
+  items           Json
+  rushShipping    Boolean  @default(false)
+  createdAt       DateTime
+  capturedAt      DateTime?
+  promiseDate     DateTime?
+  fulfilledAt     DateTime?
+  source          DataSource @default(LIVE_SANDBOX)
+
+  risk      RiskAssessment?
+  shipments Shipment[]
+  watches   Watch[]
+  disputes  Dispute[]
+
+  @@index([payerId])
+  @@index([createdAt])
+}
+
+model Transaction {
+  id                   String   @id @default(cuid())
+  paypalTransactionId  String   @unique
+  payerId              String
+  payerEmail           String?
+  amount               Decimal  @db.Decimal(12, 2)
+  currency             String   @default("USD")
+  kind                 String // SALE | REFUND | CHARGEBACK | FEE
+  status               String
+  occurredAt           DateTime
+  source               DataSource @default(LIVE_SANDBOX)
+
+  @@index([payerId, occurredAt])
+}
+
+model Shipment {
+  id             String   @id @default(cuid())
+  orderId        String
+  order          Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  trackingNumber String
+  carrier        String
+  status         String // ON_HOLD | SHIPPED | IN_TRANSIT | DELIVERED | RETURNED
+  signatureRequired Boolean @default(false)
+  shippedAt      DateTime?
+  lastMovementAt DateTime?
+  deliveredAt    DateTime?
+  source         DataSource @default(LIVE_SANDBOX)
+
+  @@index([orderId])
+}
+
+model Subscription {
+  id                   String   @id @default(cuid())
+  paypalSubscriptionId String   @unique
+  payerId              String
+  payerEmail           String
+  planId               String
+  planName             String
+  amount               Decimal  @db.Decimal(12, 2)
+  status               String
+  startedAt            DateTime
+  lastRenewedAt        DateTime?
+  lastBuyerActivityAt  DateTime? // drives the "forgot I subscribed" precursor
+  source               DataSource @default(LIVE_SANDBOX)
+}
+
+model Invoice {
+  id              String   @id @default(cuid())
+  paypalInvoiceId String   @unique
+  payerEmail      String
+  amount          Decimal  @db.Decimal(12, 2)
+  status          String
+  issuedAt        DateTime
+  dueAt           DateTime?
+  paidAt          DateTime?
+  source          DataSource @default(LIVE_SANDBOX)
+}
+
+/// SENTINEL output: pre-fulfillment dispute-risk assessment.
+model RiskAssessment {
+  id             String   @id @default(cuid())
+  orderId        String   @unique
+  order          Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  score          Int // 0-100, deterministic signal engine
+  tier           RiskTier
+  signals        Json // [{ code, weight, detail, evidence }]
+  predictedReasonCodes Json // reason codes this shape historically produced
+  narrative      String   @db.Text // LLM-written, cites the signals above
+  recommendation String // SHIP | VERIFY | HOLD
+  matchedRuleIds Json     @default("[]")
+  decision       ApprovalStatus @default(PROPOSED)
+  decidedBy      String?
+  decidedAt      DateTime?
+  createdAt      DateTime @default(now())
+}
+
+/// INTERCEPTOR output: an order showing a dispute precursor, pre-filing.
+model Watch {
+  id                  String   @id @default(cuid())
+  orderId             String
+  order               Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  precursor           String // STALLED_TRACKING | PAST_PROMISE_DATE | NO_TRACKING | DORMANT_RENEWAL | DUPLICATE_CHARGE | SILENT_HIGH_VALUE
+  severity            Int // 0-100
+  predictedReasonCode String
+  amountAtRisk        Decimal  @db.Decimal(12, 2)
+  rationale           String   @db.Text
+  status              WatchStatus @default(OPEN)
+  openedAt            DateTime @default(now())
+  resolvedAt          DateTime?
+  interventions       Intervention[]
+
+  @@index([status])
+  @@unique([orderId, precursor])
+}
+
+model Intervention {
+  id         String   @id @default(cuid())
+  watchId    String
+  watch      Watch    @relation(fields: [watchId], references: [id], onDelete: Cascade)
+  kind       InterventionKind
+  payload    Json // drafted message, refund amount, etc.
+  status     ApprovalStatus @default(PROPOSED)
+  approvedBy String?
+  executedAt DateTime?
+  result     Json?
+  createdAt  DateTime @default(now())
+}
+
+/// ADVOCATE input/output: a filed dispute and the agent's EV decision.
+model Dispute {
+  id               String   @id @default(cuid())
+  paypalDisputeId  String   @unique
+  orderId          String?
+  order            Order?   @relation(fields: [orderId], references: [id])
+  reasonCode       String // ITEM_NOT_RECEIVED | UNAUTHORIZED | SIGNIFICANTLY_NOT_AS_DESCRIBED | DUPLICATE | ...
+  status           String
+  amount           Decimal  @db.Decimal(12, 2)
+  currency         String   @default("USD")
+  buyerNote        String?  @db.Text
+  filedAt          DateTime
+  responseDueAt    DateTime?
+  source           DataSource @default(SIMULATED)
+
+  assessment DisputeAssessment?
+
+  @@index([status])
+  @@index([responseDueAt])
+}
+
+model DisputeAssessment {
+  id              String   @id @default(cuid())
+  disputeId       String   @unique
+  dispute         Dispute  @relation(fields: [disputeId], references: [id], onDelete: Cascade)
+  pWin            Float
+  evFight         Decimal  @db.Decimal(12, 2)
+  evAccept        Decimal  @db.Decimal(12, 2)
+  evidenceStrength Int // 0-100 from the deterministic evidence checklist
+  evidence        Json // [{ kind, found, detail, sourceRef }]
+  timeline        Json // reconstructed order story
+  recommendation  DisputeDecision
+  rebuttalDraft   String?  @db.Text
+  decision        DisputeDecision @default(UNDECIDED)
+  decisionStatus  ApprovalStatus  @default(PROPOSED)
+  decidedBy       String?
+  executedAt      DateTime?
+  outcome         DisputeOutcome  @default(PENDING)
+  outcomeAt       DateTime?
+  createdAt       DateTime @default(now())
+}
+
+/// LEARNER output: a prevention rule the agent wrote from its own outcomes.
+model Rule {
+  id             String   @id @default(cuid())
+  plainEnglish   String   @db.Text
+  condition      Json // machine-checkable predicate consumed by Sentinel
+  action         String // HOLD | REQUIRE_SIGNATURE | REQUIRE_TRACKING | VERIFY_PAYER | REQUIRE_CONFIRMATION
+  status         RuleStatus @default(PROPOSED)
+  derivedFrom    Json // dispute ids that produced this rule
+  projectedDisputesAvoided Int
+  projectedSavings Decimal @db.Decimal(12, 2)
+  observedMatches Int      @default(0)
+  createdAt      DateTime @default(now())
+  approvedAt     DateTime?
+  approvedBy     String?
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actor      String // SENTINEL | INTERCEPTOR | ADVOCATE | LEARNER | human:<name>
+  action     String
+  targetType String
+  targetId   String
+  payload    Json
+  at         DateTime @default(now())
+
+  @@index([at])
+  @@index([targetType, targetId])
+}

@@ -1,0 +1,39 @@
+{
+  "name": "aegis",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Closed-loop chargeback defense agent for PayPal merchants: prevent, defend, learn.",
+  "license": "MIT",
+  "scripts": {
+    "dev": "next dev",
+    "build": "prisma generate && prisma migrate deploy && next build",
+    "start": "next start",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "db:push": "prisma db push",
+    "db:studio": "prisma studio",
+    "seed": "tsx scripts/seed.ts",
+    "agents:run": "tsx scripts/run-agents.ts"
+  },
+  "dependencies": {
+    "@ag-grid-community/client-side-row-model": "32.3.3",
+    "@anthropic-ai/sdk": "0.32.1",
+    "@prisma/client": "5.22.0",
+    "ag-grid-community": "32.3.3",
+    "ag-grid-enterprise": "32.3.3",
+    "ag-grid-react": "32.3.3",
+    "dotenv": "16.4.5",
+    "next": "14.2.18",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "zod": "3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "22.9.0",
+    "@types/react": "18.3.12",
+    "@types/react-dom": "18.3.1",
+    "prisma": "5.22.0",
+    "tsx": "4.19.2",
+    "typescript": "5.6.3"
+  }
+}

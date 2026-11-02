@@ -1,0 +1,13 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: aegis
+      POSTGRES_PASSWORD: aegis
+      POSTGRES_DB: aegis
+    ports:
+      - "55439:5432"
+    volumes:
+      - aegis-db:/var/lib/postgresql/data
+volumes:
+  aegis-db:
