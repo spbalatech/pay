@@ -1,0 +1,1087 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aegis — Run, Demo, Architecture</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;450;500;600;700&display=swap">
+<style>
+/* Layout: single measured column, full-bleed rules between sections,
+   diagrams break out wider than the text column. */
+:root {
+  --paper:        #fbfbfa;
+  --surface:      #ffffff;
+  --sunk:         #f3f3f1;
+  --ink:          #14161a;
+  --ink-2:        #4e545e;
+  --ink-3:        #878d97;
+  --rule:         #e3e3df;
+  --prevent:      #2a78d6;
+  --defend:       #c25410;
+  --good:         #0b7a38;
+  --alarm:        #b3261e;
+
+  --sans: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --measure: 68ch;
+  --wide: 1080px;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper:   #121315;
+    --surface: #1a1c1f;
+    --sunk:    #0d0e10;
+    --ink:     #eceef1;
+    --ink-2:   #a8aeb8;
+    --ink-3:   #767c86;
+    --rule:    #2a2d32;
+    --prevent: #5d9df0;
+    --defend:  #e8803f;
+    --good:    #3fb469;
+    --alarm:   #e4675f;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper:   #121315;
+  --surface: #1a1c1f;
+  --sunk:    #0d0e10;
+  --ink:     #eceef1;
+  --ink-2:   #a8aeb8;
+  --ink-3:   #767c86;
+  --rule:    #2a2d32;
+  --prevent: #5d9df0;
+  --defend:  #e8803f;
+  --good:    #3fb469;
+  --alarm:   #e4675f;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+.wrap {
+  max-width: var(--wide);
+  margin: 0 auto;
+  padding-left: max(20px, env(safe-area-inset-left, 0px));
+  padding-right: max(20px, env(safe-area-inset-right, 0px));
+}
+.col { max-width: var(--measure); }
+
+/* ---------------------------------------------------------- masthead */
+
+.masthead { padding-block: 56px 36px; border-bottom: 1px solid var(--rule); }
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin: 0 0 14px;
+}
+h1 {
+  font-size: clamp(2.3rem, 6vw, 3.4rem);
+  font-weight: 600;
+  letter-spacing: -0.035em;
+  line-height: 1.02;
+  margin: 0 0 16px;
+  text-wrap: balance;
+}
+.standfirst {
+  font-size: 1.14rem;
+  line-height: 1.55;
+  color: var(--ink-2);
+  margin: 0;
+  max-width: 60ch;
+}
+.standfirst strong { color: var(--ink); font-weight: 550; }
+
+.facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 28px;
+  margin-top: 30px;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  color: var(--ink-3);
+}
+.facts b { color: var(--ink-2); font-weight: 500; }
+
+/* ----------------------------------------------------------- sections */
+
+section { padding-block: 44px; border-bottom: 1px solid var(--rule); }
+section:last-of-type { border-bottom: 0; }
+
+h2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  letter-spacing: -0.022em;
+  margin: 0 0 6px;
+  text-wrap: balance;
+}
+h2 .num {
+  font-family: var(--mono);
+  font-size: 0.72em;
+  font-weight: 500;
+  color: var(--ink-3);
+  margin-right: 12px;
+  letter-spacing: 0;
+}
+.lede { color: var(--ink-2); margin: 0 0 26px; max-width: 62ch; }
+
+h3 {
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin: 32px 0 12px;
+}
+p { margin: 0 0 16px; }
+a { color: var(--prevent); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+strong { font-weight: 600; }
+
+/* --------------------------------------------------------------- code */
+
+pre {
+  font-family: var(--mono);
+  font-size: 12.8px;
+  line-height: 1.75;
+  background: var(--sunk);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin: 0 0 16px;
+  overflow-x: auto;
+}
+code { font-family: var(--mono); font-size: 0.89em; }
+p code, li code, td code {
+  background: var(--sunk);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+pre .c { color: var(--ink-3); }
+
+/* ------------------------------------------------------------- tables */
+
+.tablewrap { overflow-x: auto; margin: 0 0 18px; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; min-width: 460px; }
+th, td { text-align: left; padding: 9px 14px 9px 0; border-bottom: 1px solid var(--rule); vertical-align: top; }
+th {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  font-weight: 500;
+  white-space: nowrap;
+}
+td.mono, td .amt { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+tbody tr:last-child td { border-bottom: 0; }
+
+/* -------------------------------------------------------------- lists */
+
+ul.plain { list-style: none; padding: 0; margin: 0 0 16px; }
+ul.plain li {
+  display: flex;
+  gap: 11px;
+  padding: 6px 0;
+  align-items: baseline;
+}
+ul.plain li::before {
+  content: "—";
+  color: var(--ink-3);
+  flex: 0 0 auto;
+  font-family: var(--mono);
+}
+
+/* -------------------------------------------------------------- cards */
+
+.grid { display: grid; gap: 14px; margin-bottom: 8px; }
+.grid-3 { grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  padding: 16px 17px;
+  min-width: 0;
+}
+.card h4 {
+  margin: 0 0 7px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.card p { margin: 0; font-size: 14px; color: var(--ink-2); line-height: 1.55; }
+.card .tag {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 999px;
+  margin-bottom: 9px;
+}
+.tag-prevent { color: var(--prevent); border: 1px solid color-mix(in srgb, var(--prevent) 40%, transparent); }
+.tag-defend  { color: var(--defend);  border: 1px solid color-mix(in srgb, var(--defend) 45%, transparent); }
+.tag-learn   { color: var(--good);    border: 1px solid color-mix(in srgb, var(--good) 40%, transparent); }
+
+/* --------------------------------------------------------- stat strip */
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 1px;
+  background: var(--rule);
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 20px;
+}
+.stat { background: var(--surface); padding: 15px 16px; }
+.stat .k {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-bottom: 6px;
+}
+.stat .v { font-size: 1.6rem; font-weight: 600; letter-spacing: -0.03em; line-height: 1.05; }
+.stat .n { font-size: 12px; color: var(--ink-3); margin-top: 5px; line-height: 1.4; }
+.stat.prevent .v { color: var(--prevent); }
+.stat.defend .v  { color: var(--defend); }
+
+/* ------------------------------------------------------------ callout */
+
+.note {
+  border-left: 2px solid var(--rule);
+  padding: 2px 0 2px 16px;
+  margin: 0 0 18px;
+  color: var(--ink-2);
+  font-size: 14.5px;
+}
+.note.warn { border-left-color: var(--alarm); }
+.note.warn b { color: var(--alarm); }
+.note b { color: var(--ink); font-weight: 600; }
+
+/* ------------------------------------------------------------ diagram */
+
+.figure { margin: 0 0 10px; }
+.figbar {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 9px;
+  flex-wrap: wrap;
+}
+.figtitle {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.btn {
+  font-family: var(--sans);
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ink-2);
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  padding: 4px 11px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.btn:hover { color: var(--ink); border-color: var(--ink-3); }
+.btn:focus-visible { outline: 2px solid var(--prevent); outline-offset: 2px; }
+
+.diagram {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  padding: 20px 16px;
+  overflow: auto;
+  min-height: 90px;
+}
+.diagram pre.mermaid { background: none; border: 0; padding: 0; margin: 0; overflow: visible; text-align: center; }
+.diagram svg { max-width: 100%; height: auto; }
+
+/* Expanded: fills the viewport whether or not the Fullscreen API is granted. */
+.diagram.expanded {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  border-radius: 0;
+  border: 0;
+  padding: 64px 24px 24px;
+  display: grid;
+  place-items: center;
+}
+.diagram.expanded svg { max-width: 100%; max-height: 100%; width: auto; }
+.diagram:fullscreen { background: var(--surface); padding: 64px 24px 24px; display: grid; place-items: center; }
+.diagram:fullscreen svg { max-width: 100%; max-height: 100%; }
+
+.closebar {
+  position: fixed;
+  top: 14px;
+  right: 18px;
+  z-index: 61;
+  display: none;
+  gap: 8px;
+}
+.closebar.on { display: flex; }
+
+.figcap { font-size: 13px; color: var(--ink-3); margin: 0 0 4px; max-width: 70ch; line-height: 1.5; }
+
+footer {
+  padding-block: 34px 56px;
+  color: var(--ink-3);
+  font-size: 13px;
+}
+footer p { margin: 0 0 8px; max-width: 70ch; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
+@media (max-width: 640px) {
+  .masthead { padding-block: 36px 28px; }
+  section { padding-block: 34px; }
+  h2 .num { display: block; margin-bottom: 4px; }
+}
+</style>
+</head>
+<body>
+
+<div class="closebar" id="closebar">
+  <button class="btn" id="closebtn">Close diagram &nbsp;Esc</button>
+</div>
+
+<header class="masthead">
+  <div class="wrap">
+    <p class="eyebrow">PayPal AI Hackathon · Submission docs</p>
+    <h1>Aegis</h1>
+    <p class="standfirst">
+      A closed-loop chargeback defense agent for PayPal merchants. It <strong>prevents</strong>
+      disputes before they are filed, <strong>defends</strong> the ones that land, and turns every
+      outcome into a <strong>prevention rule</strong> — so the same loss does not happen twice.
+    </p>
+    <div class="facts">
+      <span><b>Stack</b> Next.js 14 · TypeScript · Postgres · Prisma</span>
+      <span><b>PayPal</b> 10 API families + webhooks</span>
+      <span><b>Model</b> Claude or local Llama</span>
+      <span><b>License</b> MIT</span>
+    </div>
+  </div>
+</header>
+
+<main>
+
+<!-- ============================================================ RUN IT -->
+<section>
+  <div class="wrap">
+    <h2><span class="num">01</span>Run it</h2>
+    <p class="lede col">
+      Five commands from a clean clone. Only <code>DATABASE_URL</code> is actually required —
+      everything else degrades in a named way rather than failing.
+    </p>
+
+    <h3>Prerequisites</h3>
+    <ul class="plain col">
+      <li>Node 18 or newer</li>
+      <li>Docker, for Postgres — or any Postgres 14+ you already have</li>
+      <li>Optional: a PayPal sandbox app, for live writes</li>
+      <li>Optional: an Anthropic API key <em>or</em> a local Ollama, for the drafting and rule-writing agents</li>
+    </ul>
+
+    <h3>Start</h3>
+<pre><span class="c"># from the repo root</span>
+npm install
+cp .env.example .env
+
+docker compose up -d          <span class="c"># Postgres on :55439</span>
+npx prisma migrate deploy     <span class="c"># create the schema</span>
+
+npm run seed                  <span class="c"># 90 days of merchant history</span>
+npm run agents:run            <span class="c"># one full pass of the loop</span>
+npm run dev                   <span class="c"># console on :3000</span></pre>
+
+    <div class="note">
+      <b>No PayPal account yet?</b> <code>npm run seed -- --offline</code> builds the whole
+      history without calling PayPal. Three of the four agents still run to completion, because
+      their scores are arithmetic rather than model output.
+    </div>
+
+    <h3>What each credential buys you</h3>
+    <div class="tablewrap col" style="max-width:none">
+      <table>
+        <thead>
+          <tr><th>Missing</th><th>Still works</th><th>Stops</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="mono">PAYPAL_CLIENT_ID<br>PAYPAL_CLIENT_SECRET</td>
+            <td>The entire console, all four agents, the offline seeder</td>
+            <td>Live sandbox writes — orders, invoices, refunds, accept-claim, tracking</td>
+          </tr>
+          <tr>
+            <td class="mono">Model provider</td>
+            <td>Sentinel, Interceptor and Advocate in full</td>
+            <td>Learner proposes no rules; narratives fall back to plain summaries</td>
+          </tr>
+          <tr>
+            <td class="mono">PAYPAL_WEBHOOK_ID</td>
+            <td>Everything above</td>
+            <td>The webhook receiver rejects every delivery — it cannot verify signatures</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Diagnostics</h3>
+<pre>npm run ai:check              <span class="c"># which model provider is live, with a round trip</span>
+npm run paypal:check          <span class="c"># exercises all 10 PayPal endpoints Aegis uses</span>
+npm run webhook -- list       <span class="c"># registered webhook subscriptions</span></pre>
+
+    <h3>Choosing a model</h3>
+    <p class="col">
+      Set <code>AEGIS_AI_PROVIDER</code> to <code>anthropic</code>, <code>ollama</code>,
+      <code>none</code>, or <code>auto</code> — which prefers a configured Anthropic key and falls
+      back to a reachable local Ollama. Nothing else changes; both providers sit behind one
+      interface and the agents never know which is in use.
+    </p>
+<pre><span class="c"># hosted</span>
+ANTHROPIC_API_KEY=sk-ant-…
+
+<span class="c"># or entirely local, no API key, no network</span>
+AEGIS_AI_PROVIDER=ollama
+OLLAMA_MODEL=llama3.1:8b</pre>
+  </div>
+</section>
+
+<!-- =========================================================== DEMO IT -->
+<section>
+  <div class="wrap">
+    <h2><span class="num">02</span>Where to demo</h2>
+    <p class="lede col">
+      Six pages on <code>localhost:3000</code>. The order below is also the order to film: it walks
+      prevention, then defense, then the loop closing.
+    </p>
+
+    <div class="tablewrap col" style="max-width:none">
+      <table>
+        <thead>
+          <tr><th>Route</th><th>Agent</th><th>What to show</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="mono">/</td><td>—</td>
+            <td>Hero: total value protected, split prevention versus defense</td>
+          </tr>
+          <tr>
+            <td class="mono">/orders</td><td>Sentinel</td>
+            <td>49 orders grouped by risk tier. Click a row — the weighted signals behind the score, not a model's opinion</td>
+          </tr>
+          <tr>
+            <td class="mono">/watchlist</td><td>Interceptor</td>
+            <td>Disputes that have not been filed yet. The drafted outreach, and Approve &amp; send</td>
+          </tr>
+          <tr>
+            <td class="mono">/disputes</td><td>Advocate</td>
+            <td>Grouped by reason code. The expected-value arithmetic, evidence checklist, drafted rebuttal</td>
+          </tr>
+          <tr>
+            <td class="mono">/rulebook</td><td>Learner</td>
+            <td><strong>The money shot.</strong> A rule the agent wrote from its own losses. Approve it, then re-run Sentinel and watch it enforced</td>
+          </tr>
+          <tr>
+            <td class="mono">/audit</td><td>—</td>
+            <td>Every decision, grouped by actor: what the agents did alone, what a human signed off</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Demonstrating the webhook path</h3>
+    <p class="col">
+      PayPal has to reach the endpoint from the public internet, so put a tunnel in front of it.
+    </p>
+<pre>npm run dev
+cloudflared tunnel --url http://localhost:3000     <span class="c"># second terminal</span>
+
+npm run webhook -- register https://&lt;tunnel&gt;/api/webhooks/paypal
+<span class="c"># put the returned id in .env as PAYPAL_WEBHOOK_ID, then restart</span>
+
+curl localhost:3000/api/webhooks/paypal            <span class="c"># liveness + event counts</span></pre>
+
+    <div class="note warn">
+      <b>Do not set AEGIS_WEBHOOK_ALLOW_UNVERIFIED in a demo anyone can reach.</b>
+      It exists so the handler can be exercised against PayPal's simulate-event endpoint, whose
+      events can never pass real signature verification. Unset means off, which is the right answer
+      everywhere else.
+    </div>
+
+    <h3>Hosting it</h3>
+    <p class="col">
+      One Next.js service plus a managed Postgres. Set <code>DATABASE_URL</code> and the PayPal
+      credentials as environment variables, never in the repo; build with
+      <code>npm run build</code>, which runs <code>prisma migrate deploy</code> first. Then register
+      the webhook against the deployed URL instead of a tunnel.
+    </p>
+  </div>
+</section>
+
+<!-- ====================================================== ARCHITECTURE -->
+<section>
+  <div class="wrap">
+    <h2><span class="num">03</span>Architecture</h2>
+    <p class="lede col">
+      Four agents around one loop. The arrow from Learner back to Sentinel is the product; the rest
+      is plumbing.
+    </p>
+
+    <figure class="figure">
+      <div class="figbar">
+        <span class="figtitle">Fig. 1 — System</span>
+        <button class="btn" data-expand="d1">Maximize</button>
+      </div>
+      <div class="diagram" id="d1">
+<pre class="mermaid">
+flowchart TB
+  subgraph PP["PayPal Developer Platform"]
+    direction LR
+    ORD["Orders &amp; Payments"]
+    DIS["Disputes"]
+    TRK["Shipment tracking"]
+    TXN["Transaction search"]
+    INV["Invoicing"]
+    SUB["Subscriptions"]
+    WHK["Webhooks"]
+  end
+
+  subgraph CORE["Aegis"]
+    direction TB
+    CLIENT["REST client<br/><small>token cache · idempotency keys · backoff</small>"]
+    RECV["Webhook receiver<br/><small>verify · 200 fast · idempotent</small>"]
+
+    subgraph AGENTS["The loop"]
+      direction LR
+      S["SENTINEL<br/><small>order risk</small>"]
+      I["INTERCEPTOR<br/><small>pre-dispute deflection</small>"]
+      A["ADVOCATE<br/><small>dispute defense</small>"]
+      L["LEARNER<br/><small>outcome to rule</small>"]
+    end
+
+    DET["Signal engine &amp; EV engine<br/><small>deterministic arithmetic — no model</small>"]
+    RULES["Rulebook<br/><small>closed predicate language</small>"]
+    DB[("Postgres<br/><small>orders · watches · disputes<br/>rules · audit log</small>")]
+  end
+
+  AI["Model provider<br/><small>Claude or local Llama</small>"]
+  UI["Operations console<br/><small>AG Grid queues · approvals</small>"]
+  HUMAN(["Merchant"])
+
+  PP <--> CLIENT
+  WHK -. "signed events" .-> RECV
+  CLIENT --> AGENTS
+  RECV --> A
+
+  DET --> S
+  DET --> A
+  S <--> DB
+  I <--> DB
+  A <--> DB
+  L <--> DB
+
+  S --> I --> A --> L
+  L -- "proposes rule" --> RULES
+  RULES -- "enforced on new orders" --> S
+
+  AGENTS -. "drafting only" .-> AI
+  DB --> UI
+  UI --> HUMAN
+  HUMAN -- "approves · overrides" --> UI
+
+  classDef prevent stroke:#2a78d6,stroke-width:2px
+  classDef defend stroke:#c25410,stroke-width:2px
+  classDef learn stroke:#0b7a38,stroke-width:2px
+  class S,I prevent
+  class A defend
+  class L,RULES learn
+</pre>
+      </div>
+      <figcaption class="figcap">
+        Scores and expected values come from the deterministic engine. The model is reached only
+        for drafting and rule proposal — the dotted line.
+      </figcaption>
+    </figure>
+
+    <h3>Why the scores are not written by a model</h3>
+    <p class="col">
+      Risk scores and expected values are plain arithmetic over facts the system can point at. The
+      model's jobs are the ones language is good at: explaining which signals fired, drafting buyer
+      outreach, writing rebuttals, proposing rules. It never invents a number.
+    </p>
+    <p class="col">
+      That split is what lets a merchant ask <em>why did you hold my order?</em> and get a list of
+      weighted signals instead of a vibe — and it means the same inputs produce the same score on
+      every run.
+    </p>
+  </div>
+</section>
+
+<!-- ============================================================== FLOW -->
+<section>
+  <div class="wrap">
+    <h2><span class="num">04</span>Flow</h2>
+    <p class="lede col">
+      One order, through all four agents. The dispute that never happens is the cheapest one.
+    </p>
+
+    <figure class="figure">
+      <div class="figbar">
+        <span class="figtitle">Fig. 2 — Order lifecycle</span>
+        <button class="btn" data-expand="d2">Maximize</button>
+      </div>
+      <div class="diagram" id="d2">
+<pre class="mermaid">
+flowchart LR
+  P["Order placed<br/><small>$184 · apartment address<br/>first-time payer</small>"]
+  S{"SENTINEL<br/>score 46"}
+  HOLD["Held for verification"]
+  SHIP["Ships"]
+  W{"INTERCEPTOR<br/>day 7"}
+  OK["Delivered<br/>no dispute"]
+  DEF["Deflected<br/><small>outreach sent · buyer replies<br/>to the merchant, not their bank</small>"]
+  D["Dispute filed"]
+  ADV{"ADVOCATE<br/>EV decision"}
+  FIGHT["Fight<br/><small>rebuttal drafted,<br/>evidence cited</small>"]
+  ACC["Accept &amp; refund<br/><small>winning costs more<br/>than the claim</small>"]
+  OUT["Outcome recorded"]
+  LRN["LEARNER<br/><small>'4 of your last 6 losses were<br/>over $150 to multi-unit addresses<br/>without signature'</small>"]
+  RULE["Rule approved<br/>by the merchant"]
+
+  P --> S
+  S -- "70+" --> HOLD
+  S -- "below 70" --> SHIP
+  SHIP --> W
+  W -- "tracking moving" --> OK
+  W -- "stalled 5 days" --> DEF
+  DEF -. "intervention declined<br/>or too late" .-> D
+  D --> ADV
+  ADV -- "evidence 85%" --> FIGHT
+  ADV -- "evidence 0%" --> ACC
+  FIGHT --> OUT
+  ACC --> OUT
+  OUT --> LRN --> RULE
+  RULE == "enforced on every future order" ==> S
+
+  classDef prevent stroke:#2a78d6,stroke-width:2px
+  classDef defend stroke:#c25410,stroke-width:2px
+  classDef learn stroke:#0b7a38,stroke-width:2px
+  classDef quiet fill:none,stroke:#878d97,stroke-dasharray:3 3
+  class S,W,HOLD,DEF prevent
+  class ADV,FIGHT,ACC,D defend
+  class LRN,RULE learn
+  class OK quiet
+</pre>
+      </div>
+      <figcaption class="figcap">
+        The thick arrow at the bottom closes the loop. Without it this is two tools; with it the
+        same loss stops recurring.
+      </figcaption>
+    </figure>
+
+    <figure class="figure" style="margin-top:34px">
+      <div class="figbar">
+        <span class="figtitle">Fig. 3 — A real dispute arriving by webhook</span>
+        <button class="btn" data-expand="d3">Maximize</button>
+      </div>
+      <div class="diagram" id="d3">
+<pre class="mermaid">
+sequenceDiagram
+  autonumber
+  participant B as Buyer
+  participant PP as PayPal
+  participant R as Webhook receiver
+  participant DB as Postgres
+  participant AD as Advocate
+
+  B->>PP: Files a dispute
+  PP->>R: POST CUSTOMER.DISPUTE.CREATED
+  Note over R: Read the RAW body.<br/>Re-serializing breaks the signature.
+  R->>DB: Seen this event id before?
+  DB-->>R: No
+  R->>PP: verify-webhook-signature
+  PP-->>R: SUCCESS
+
+  rect rgba(42,120,214,0.08)
+    Note over R,DB: Nothing is persisted until the<br/>signature is accepted — a forged id<br/>must not suppress the real delivery.
+    R->>DB: Record the event
+  end
+
+  R-->>PP: 200 accepted
+  Note over R,PP: Answered inside the 30s window.<br/>The work happens after.
+
+  R->>PP: GET the full dispute
+  PP-->>R: Reason code, stage, due date
+  R->>DB: Match to its order by capture id
+  R->>AD: Assess
+  AD->>DB: Evidence, P(win), EV, drafted rebuttal
+  AD->>DB: Mark open watches ESCALATED_TO_DISPUTE
+</pre>
+      </div>
+      <figcaption class="figcap">
+        Tested: missing headers return 400, a bad signature 401 with nothing written, a replay 200
+        duplicate, and a forged event id cannot suppress the genuine delivery that follows.
+      </figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- ============================================================= STACK -->
+<section>
+  <div class="wrap">
+    <h2><span class="num">05</span>Tech stack</h2>
+    <p class="lede col">Chosen for a ten-day build that still had to run for real.</p>
+
+    <div class="tablewrap col" style="max-width:none">
+      <table>
+        <thead><tr><th>Layer</th><th>Choice</th><th>Why</th></tr></thead>
+        <tbody>
+          <tr><td>App</td><td class="mono">Next.js 14 · React 18 · TypeScript</td><td>One deploy serves the API and the console; server components read the database directly</td></tr>
+          <tr><td>Data</td><td class="mono">Postgres · Prisma 5</td><td>Provenance, money and an audit trail want a relational schema and real migrations</td></tr>
+          <tr><td>PayPal</td><td class="mono">REST v1/v2, hand-written client</td><td>Token caching, idempotency keys on every write, backoff on 429 and 5xx, named errors carrying <code>debug_id</code></td></tr>
+          <tr><td>Model</td><td class="mono">Claude · Ollama</td><td>Interchangeable behind one interface. Anthropic forces a tool call; Ollama constrains decoding to the JSON Schema</td></tr>
+          <tr><td>Grids</td><td class="mono">AG Grid Enterprise</td><td>Row grouping by the unit an operator works in, sum aggregation, grand-total row, master detail</td></tr>
+          <tr><td>Timeline</td><td class="mono">Bryntum Scheduler</td><td>Dispute response deadlines against fulfillment promise dates</td></tr>
+          <tr><td>Hosting</td><td class="mono">Render</td><td>One web service plus managed Postgres, and the public URL the webhook needs</td></tr>
+          <tr><td>Validation</td><td class="mono">Zod</td><td>Environment parsed at boot; a malformed security flag stops the process rather than failing open</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>PayPal surface used</h3>
+    <div class="tablewrap col" style="max-width:none">
+      <table>
+        <thead><tr><th>Area</th><th>Endpoints</th></tr></thead>
+        <tbody>
+          <tr><td>Orders</td><td class="mono">POST/GET /v2/checkout/orders</td></tr>
+          <tr><td>Payments</td><td class="mono">POST /v2/payments/captures/{id}/refund · GET /v2/payments/refunds/{id}</td></tr>
+          <tr><td>Disputes</td><td class="mono">GET /v1/customer/disputes · GET /{id} · POST /{id}/accept-claim</td></tr>
+          <tr><td>Reporting</td><td class="mono">GET /v1/reporting/transactions</td></tr>
+          <tr><td>Tracking</td><td class="mono">POST /v1/shipping/trackers-batch · GET/PUT /v1/shipping/trackers/{id}</td></tr>
+          <tr><td>Invoicing</td><td class="mono">POST /v2/invoicing/invoices · POST /{id}/send · GET /v2/invoicing/invoices</td></tr>
+          <tr><td>Catalog</td><td class="mono">POST /v1/catalogs/products</td></tr>
+          <tr><td>Subscriptions</td><td class="mono">POST /v1/billing/plans · /v1/billing/subscriptions/{id}/cancel · /suspend</td></tr>
+          <tr><td>Webhooks</td><td class="mono">POST /v1/notifications/verify-webhook-signature · /webhooks · /simulate-event</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ========================================================== BENEFITS -->
+<section>
+  <div class="wrap">
+    <h2><span class="num">06</span>Why a merchant would run it</h2>
+    <p class="lede col">
+      For a business doing $50k–$5M a year on PayPal: big enough to get chargebacks weekly, too
+      small to employ anyone to fight them.
+    </p>
+
+    <h3>Measured on the seeded merchant</h3>
+    <div class="stats">
+      <div class="stat prevent">
+        <div class="k">Deflected before filing</div>
+        <div class="v">$2,984</div>
+        <div class="n">8 disputes that never existed</div>
+      </div>
+      <div class="stat defend">
+        <div class="k">Retained by defense</div>
+        <div class="v">$899</div>
+        <div class="n">7 contested, 43% won</div>
+      </div>
+      <div class="stat">
+        <div class="k">Prevention advantage</div>
+        <div class="v">3.3&times;</div>
+        <div class="n">cheaper than fighting</div>
+      </div>
+      <div class="stat">
+        <div class="k">Told not to fight</div>
+        <div class="v">6 of 12</div>
+        <div class="n">≈4 hours of pointless work avoided</div>
+      </div>
+    </div>
+
+    <div class="grid grid-3">
+      <div class="card">
+        <span class="tag tag-defend">Defend</span>
+        <h4>Deadlines stop being how you lose</h4>
+        <p>Cases are lost by default because assembling evidence from four places takes 40 minutes nobody has. Every dispute is triaged the day it lands.</p>
+      </div>
+      <div class="card">
+        <span class="tag tag-defend">Defend</span>
+        <h4>You stop losing money by winning</h4>
+        <p>On a $68 claim with weak evidence, fighting costs $94 and accepting costs $70. The agent says accept, and shows the arithmetic.</p>
+      </div>
+      <div class="card">
+        <span class="tag tag-prevent">Prevent</span>
+        <h4>Most chargebacks are not fraud</h4>
+        <p>A parcel that stopped moving, a forgotten subscription, a duplicate charge. A fraud score at checkout is blind to all of it; a lifecycle agent is not.</p>
+      </div>
+      <div class="card">
+        <span class="tag tag-prevent">Prevent</span>
+        <h4>Intervene inside the window</h4>
+        <p>There is a period where the buyer is annoyed at the merchant and has not yet called their bank. That is the cheapest dispute prevention available.</p>
+      </div>
+      <div class="card">
+        <span class="tag tag-learn">Learn</span>
+        <h4>It compounds</h4>
+        <p>Month one it defends. Month six it has rules that permanently closed three classes of loss, each traceable to the disputes that justified it.</p>
+      </div>
+      <div class="card">
+        <span class="tag tag-learn">Learn</span>
+        <h4>You can always answer “why?”</h4>
+        <p>Weighted signals and a dollar figure, with every agent action and human override in an audit log grouped by actor.</p>
+      </div>
+    </div>
+
+    <h3>What it is not</h3>
+    <div class="tablewrap col" style="max-width:none">
+      <table>
+        <thead><tr><th>PayPal's risk engine</th><th>Aegis</th></tr></thead>
+        <tbody>
+          <tr><td>Scores fraud at authorization</td><td>Watches the whole lifecycle, after payment</td></tr>
+          <tr><td>Generic across all merchants</td><td>Learns this merchant's reason codes from this merchant's outcomes</td></tr>
+          <tr><td>Catches stolen cards</td><td>Catches service failures and friendly fraud — the majority</td></tr>
+          <tr><td>Produces a score</td><td>Takes actions under the merchant's own ceilings, with an audit trail</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Where the merchant stays in charge</h3>
+    <p class="col">
+      Auto-accept ships <strong>disabled</strong>. PayPal's own integration guidance is that a
+      dispute claim should never be accepted automatically without review, so a merchant has to opt
+      in by setting a ceiling. With it off the Advocate still assembles the evidence, computes the
+      expected value and drafts the rebuttal — and a human presses the button. The agent removes the
+      40 minutes of assembly, not the decision.
+    </p>
+  </div>
+</section>
+
+<!-- ======================================================== PROVENANCE -->
+<section>
+  <div class="wrap">
+    <h2><span class="num">07</span>About the demo data</h2>
+    <p class="lede col">
+      Two things the PayPal sandbox cannot originate. Aegis does not pretend otherwise, and every
+      row carries its provenance.
+    </p>
+
+    <div class="tablewrap col" style="max-width:none">
+      <table>
+        <thead><tr><th>Marker</th><th>Meaning</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="mono">LIVE_SANDBOX</td>
+            <td>Created at PayPal and fully real — catalog products, subscription plans, invoices created and sent, and any dispute arriving through the webhook</td>
+          </tr>
+          <tr>
+            <td class="mono">LIVE_UNCAPTURED</td>
+            <td>The order genuinely exists at PayPal and is fetchable by id, but capture needs browser approval or Advanced Card Payments on the business account, so the capture id is local. <em>The order is real</em> and <em>the payment is real</em> are different claims</td>
+          </tr>
+          <tr>
+            <td class="mono">SIMULATED</td>
+            <td>A fixture. Inbound buyer disputes cannot be filed against a sandbox merchant at all, so the seeded dispute history is written directly to the database</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="col">
+      The console badges simulated rows, the seeder prints the split on every run, and every
+      <em>action</em> an agent takes runs against the live sandbox API. A refund against a simulated
+      order records as skipped rather than being faked against a capture id that does not exist at
+      PayPal.
+    </p>
+    <p class="col">
+      The seeder also plants one recurring loss shape on purpose — high-value orders to multi-unit
+      addresses shipped without signature confirmation — so the Learner has a genuine pattern to
+      find rather than noise.
+    </p>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <p>
+      Aegis · MIT licensed · built for the PayPal AI Hackathon, submissions closing
+      12:00 pm Pacific, 12 November 2026.
+    </p>
+    <p>
+      Diagrams rendered with Mermaid. Press <code>Esc</code> or click Close to leave an expanded
+      diagram.
+    </p>
+  </div>
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.9.1/mermaid.min.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  var sources = {};
+  document.querySelectorAll("pre.mermaid").forEach(function (el, i) {
+    el.dataset.key = "m" + i;
+    sources["m" + i] = el.textContent;
+  });
+
+  function darkMode() {
+    var attr = document.documentElement.getAttribute("data-theme");
+    if (attr === "dark") return true;
+    if (attr === "light") return false;
+    return window.matchMedia("(prefers-color-scheme: dark)").matches;
+  }
+
+  function cssVar(name) {
+    return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  }
+
+  function render() {
+    if (!window.mermaid) return;
+    var dark = darkMode();
+
+    mermaid.initialize({
+      startOnLoad: false,
+      securityLevel: "strict",
+      theme: "base",
+      fontFamily: '"IBM Plex Sans", system-ui, sans-serif',
+      flowchart: { curve: "basis", nodeSpacing: 42, rankSpacing: 54, htmlLabels: true },
+      sequence: { useMaxWidth: true, wrap: true },
+      themeVariables: {
+        background: cssVar("--surface"),
+        primaryColor: dark ? "#202327" : "#f5f6f8",
+        primaryTextColor: cssVar("--ink"),
+        primaryBorderColor: cssVar("--rule"),
+        secondaryColor: cssVar("--sunk"),
+        tertiaryColor: cssVar("--sunk"),
+        lineColor: cssVar("--ink-3"),
+        textColor: cssVar("--ink"),
+        mainBkg: dark ? "#202327" : "#f5f6f8",
+        clusterBkg: dark ? "#17191c" : "#fafaf9",
+        clusterBorder: cssVar("--rule"),
+        nodeBorder: cssVar("--rule"),
+        edgeLabelBackground: cssVar("--surface"),
+        actorBkg: dark ? "#202327" : "#f5f6f8",
+        actorBorder: cssVar("--rule"),
+        actorTextColor: cssVar("--ink"),
+        noteBkgColor: cssVar("--sunk"),
+        noteTextColor: cssVar("--ink-2"),
+        noteBorderColor: cssVar("--rule"),
+        sequenceNumberColor: cssVar("--paper"),
+        fontSize: "14px"
+      }
+    });
+
+    // Restore the original source before each pass: mermaid replaces the
+    // element's contents with SVG, so a re-render needs the text back.
+    var nodes = document.querySelectorAll("pre.mermaid");
+    nodes.forEach(function (el) {
+      el.removeAttribute("data-processed");
+      el.textContent = sources[el.dataset.key];
+    });
+
+    try {
+      mermaid.run({ nodes: nodes });
+    } catch (err) {
+      nodes.forEach(function (el) {
+        el.textContent = "Diagram failed to render: " + err;
+      });
+    }
+  }
+
+  if (window.mermaid) {
+    render();
+  } else {
+    document.querySelectorAll(".diagram").forEach(function (d) {
+      d.textContent = "Mermaid could not be loaded from the CDN. The diagram source is in the page source.";
+    });
+  }
+
+  // Re-render on theme change so the diagrams never sit in the other palette.
+  var mq = window.matchMedia("(prefers-color-scheme: dark)");
+  if (mq.addEventListener) mq.addEventListener("change", render);
+
+  /* ------------------------------------------------------ expanding */
+
+  var closebar = document.getElementById("closebar");
+  var current = null;
+
+  function expand(el) {
+    current = el;
+    el.classList.add("expanded");
+    closebar.classList.add("on");
+    document.body.style.overflow = "hidden";
+    // Fullscreen is a nicety: phones and some webviews refuse it, and the
+    // .expanded class already fills the viewport on its own.
+    if (el.requestFullscreen) {
+      el.requestFullscreen().catch(function () {});
+    }
+  }
+
+  function collapse() {
+    if (!current) return;
+    current.classList.remove("expanded");
+    closebar.classList.remove("on");
+    document.body.style.overflow = "";
+    if (document.fullscreenElement && document.exitFullscreen) {
+      document.exitFullscreen().catch(function () {});
+    }
+    current = null;
+  }
+
+  document.querySelectorAll("[data-expand]").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var target = document.getElementById(btn.dataset.expand);
+      if (target) expand(target);
+    });
+  });
+
+  document.getElementById("closebtn").addEventListener("click", collapse);
+
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && current) collapse();
+  });
+
+  document.addEventListener("fullscreenchange", function () {
+    // Leaving fullscreen by the browser's own control should also leave ours.
+    if (!document.fullscreenElement && current) collapse();
+  });
+})();
+</script>
+
+</body>
+</html>
