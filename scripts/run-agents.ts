@@ -5,6 +5,7 @@
  *   npm run agents:run
  */
 import "dotenv/config";
+import { syncDisputes } from "../src/agents/sync";
 import { runSentinel } from "../src/agents/sentinel";
 import { runInterceptor } from "../src/agents/interceptor";
 import { runAdvocate } from "../src/agents/advocate";
@@ -12,6 +13,16 @@ import { proposeRules } from "../src/agents/learner";
 import { dashboardMetrics } from "../src/agents/metrics";
 
 async function main() {
+  // Reconcile with PayPal first: a dispute that arrived while nothing was
+  // listening still has a response deadline running.
+  console.log("\n[SYNC] reconciling disputes with PayPal…");
+  try {
+    const r = await syncDisputes();
+    console.log(`  ${r.seen} at PayPal via ${r.via}; ${r.ingested.length} new, ${r.updated.length} updated.`);
+  } catch (err) {
+    console.warn(`  ! sync unavailable: ${String(err).replace(/\s+/g, " ").slice(0, 150)}`);
+  }
+
   console.log("\n[SENTINEL] scoring unassessed orders…");
   const scored = await runSentinel();
   console.log(`  ${scored.length} order(s) assessed; ${scored.filter((s) => s.tier === "HOLD").length} held.`);

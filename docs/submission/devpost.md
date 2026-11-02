@@ -178,7 +178,7 @@ and avoid the fee entirely.
 
 ```
 typescript, next.js, react, node.js, postgres, prisma, paypal-rest-api,
-paypal-webhooks, claude, anthropic, ollama, llama, ag-grid, bryntum, zod, docker
+paypal-webhooks, claude, anthropic, ollama, llama, ag-grid, zod, docker
 ```
 
 ## How each tool was used
@@ -254,12 +254,13 @@ registration and signature verification, and shipment tracker updates have no MC
 tool at all. The transport routes the five operations PayPal's MCP server actually
 exposes and leaves the rest on REST, rather than pretending the coverage is equal.
 
-**AG Grid Enterprise** — the three operator queues. Row grouping by the unit each
-queue is actually worked in (risk tier, precursor type, dispute reason code, audit
-actor), sum aggregation with a grand-total row for queue exposure, master detail for
-evidence panels, and a status bar.
-
-**Bryntum Scheduler** — dispute response deadlines against fulfillment promise dates.
+**AG Grid Enterprise** — the four operator queues. Row grouping by the unit each queue
+is actually worked in (risk tier, precursor type, dispute reason code, audit actor),
+sum aggregation with a grand-total row so each group shows its own exposure, a status
+bar with filtered counts and aggregates, conditional row styling by tier, and
+column filtering and CSV export for the finance side. Selecting a row opens a detail
+panel with that dispute's evidence checklist, reconstructed timeline and drafted
+rebuttal.
 
 **Next.js 14 / React 18 / TypeScript / Postgres / Prisma / Zod / Docker** — one
 deploy serves the API and the console; the schema carries provenance and the audit

@@ -14,6 +14,7 @@ import type { PayPalDispute, PayPalRefund, PayPalInvoice } from "./api";
  */
 
 export type Transport = "rest" | "mcp";
+export type { PayPalDispute } from "./api";
 
 export const activeTransport = (): Transport => env().AEGIS_PAYPAL_TRANSPORT;
 

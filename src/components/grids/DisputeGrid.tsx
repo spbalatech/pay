@@ -67,10 +67,10 @@ export function DisputeGrid({ rows }: { rows: DisputeRow[] }) {
       <GridShell<DisputeRow>
         rowData={rows}
         columnDefs={columnDefs}
-        height={470}
+        height={520}
         getRowId={(p) => p.data.id}
         onRowClicked={(e) => setSelected(e.data ?? null)}
-        autoGroupColumnDef={{ headerName: "Reason code", minWidth: 250 }}
+        autoGroupColumnDef={{ headerName: "Reason code", minWidth: 260 }}
       />
 
       {selected ? (

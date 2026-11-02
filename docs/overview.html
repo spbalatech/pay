@@ -652,7 +652,6 @@ curl localhost:3000/api/webhooks/paypal            <span class="c"># liveness + 
           <tr><td>PayPal</td><td class="mono">REST v1/v2, hand-written client</td><td>Token caching, idempotency keys on every write, backoff on 429 and 5xx, named errors carrying <code>debug_id</code></td></tr>
           <tr><td>Model</td><td class="mono">Claude · Ollama</td><td>Interchangeable behind one interface. Anthropic forces a tool call; Ollama constrains decoding to the JSON Schema</td></tr>
           <tr><td>Grids</td><td class="mono">AG Grid Enterprise</td><td>Row grouping by the unit an operator works in, sum aggregation, grand-total row, master detail</td></tr>
-          <tr><td>Timeline</td><td class="mono">Bryntum Scheduler</td><td>Dispute response deadlines against fulfillment promise dates</td></tr>
           <tr><td>Hosting</td><td class="mono">Render</td><td>One web service plus managed Postgres, and the public URL the webhook needs</td></tr>
           <tr><td>Validation</td><td class="mono">Zod</td><td>Environment parsed at boot; a malformed security flag stops the process rather than failing open</td></tr>
         </tbody>
