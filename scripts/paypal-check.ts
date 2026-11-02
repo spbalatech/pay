@@ -7,6 +7,8 @@
  */
 import "dotenv/config";
 import { env, hasPayPal } from "../src/lib/env";
+import { paypal, PayPalError } from "../src/lib/paypal/client";
+import { randomUUID } from "node:crypto";
 import {
   createOrder,
   getOrder,
@@ -94,7 +96,43 @@ async function main() {
     return `${plan.id} ${plan.status}`;
   });
 
-  console.log(failures === 0 ? "\nall endpoints reachable\n" : `\n${failures} endpoint(s) failed\n`);
+  // Card capture is optional: it needs Advanced Credit and Debit Card Payments
+  // on the sandbox business account, which is only available in the 37
+  // Expanded Checkout countries. Reported separately so a "no" here does not
+  // read as a broken integration.
+  console.log("\noptional — headless card capture (needs Advanced Card Payments):");
+  try {
+    const o = await paypal<{ id: string; status: string; purchase_units?: Array<{ payments?: { captures?: Array<{ id: string; status: string }> } }> }>(
+      "/v2/checkout/orders",
+      {
+        method: "POST",
+        idempotencyKey: randomUUID(),
+        body: {
+          intent: "CAPTURE",
+          purchase_units: [{ amount: { currency_code: "USD", value: "12.00" } }],
+          payment_source: {
+            card: { number: "4111111111111111", expiry: "2027-12", name: "Test Buyer", security_code: "123" },
+          },
+        },
+      },
+    );
+    const cap = o.purchase_units?.[0]?.payments?.captures?.[0];
+    console.log(`  ok    card capture             ${o.id} ${o.status}` + (cap ? ` capture=${cap.id}` : ""));
+    console.log("\n  Advanced Card Payments IS enabled — re-run `npm run seed` and orders");
+    console.log("  will be stored as LIVE_SANDBOX with real capture ids.\n");
+  } catch (err) {
+    const issue = err instanceof PayPalError ? err.issue : String(err).slice(0, 60);
+    console.log(`  off   card capture             ${issue}`);
+    if (issue === "PAYEE_NOT_ENABLED_FOR_CARD_PROCESSING") {
+      console.log("\n  Not enabled on this sandbox business account. This is optional:");
+      console.log("  without it, orders are stored as LIVE_UNCAPTURED, which is accurate.");
+      console.log("  Only the 37 Expanded Checkout countries can enable it (India cannot).\n");
+    } else {
+      console.log("");
+    }
+  }
+
+  console.log(failures === 0 ? "all required endpoints reachable\n" : `${failures} required endpoint(s) failed\n`);
   process.exit(failures === 0 ? 0 : 1);
 }
 
