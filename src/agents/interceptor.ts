@@ -343,21 +343,34 @@ export async function executeIntervention(interventionId: string, actor: string)
   if (intervention.status === "EXECUTED") return intervention;
 
   const payload = intervention.payload as { refundAmount?: number; message?: string };
+  const order = intervention.watch.order;
   let result: unknown = { note: "Message queued for delivery." };
 
   try {
     if (intervention.kind === "PREEMPTIVE_REFUND") {
-      const captureId = intervention.watch.order.captureId;
+      const captureId = order.captureId;
       if (!captureId) throw new Error("Order has no capture id; cannot refund.");
 
-      result = await createRefund(
-        captureId,
-        {
-          value: (payload.refundAmount ?? Number(intervention.watch.order.amount)).toFixed(2),
-          currency: intervention.watch.order.currency,
-        },
-        "Refunded proactively by Aegis before a dispute was filed.",
-      );
+      const amount = {
+        value: (payload.refundAmount ?? Number(order.amount)).toFixed(2),
+        currency: order.currency,
+      };
+
+      if (order.source === "LIVE_SANDBOX") {
+        result = await createRefund(
+          captureId,
+          amount,
+          "Refunded proactively by Aegis before a dispute was filed.",
+        );
+      } else {
+        // The capture id on a SIMULATED order is locally generated, so there is
+        // nothing at PayPal to refund. Recorded as skipped rather than faked.
+        result = {
+          skipped: "SIMULATED_ORDER",
+          note: "No live capture exists for this fixture; refund not sent to PayPal.",
+          wouldHaveRefunded: amount,
+        };
+      }
     }
 
     const updated = await db.intervention.update({
@@ -407,6 +420,7 @@ export async function runInterceptor(now = new Date()) {
   }
 
   const subs = await db.subscription.findMany({ where: { status: "ACTIVE" } });
+
   for (const sub of subs) {
     const p = detectDormantRenewal(sub, now);
     if (!p) continue;
@@ -420,6 +434,22 @@ export async function runInterceptor(now = new Date()) {
     if (order) {
       const w = await openWatch(order, p);
       opened.push(w.id);
+    }
+  }
+
+  // Carry out what policy already approved. Without this the auto-approval
+  // ceiling would be decorative: a proposal nobody executes deflects nothing.
+  const ready = await db.intervention.findMany({
+    where: { status: "AUTO_APPROVED" },
+    select: { id: true },
+  });
+
+  for (const { id } of ready) {
+    try {
+      await executeIntervention(id, "INTERCEPTOR");
+    } catch (err) {
+      // executeIntervention already recorded the failure on the row.
+      console.warn(`  ! intervention ${id} failed: ${String(err).slice(0, 120)}`);
     }
   }
 

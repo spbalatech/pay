@@ -16,7 +16,6 @@
     "agents:run": "tsx scripts/run-agents.ts"
   },
   "dependencies": {
-    "@ag-grid-community/client-side-row-model": "32.3.3",
     "@anthropic-ai/sdk": "0.32.1",
     "@prisma/client": "5.22.0",
     "ag-grid-community": "32.3.3",
