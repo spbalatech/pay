@@ -210,10 +210,19 @@ uses Ollama's `format` parameter, which constrains decoding to the JSON Schema r
 than asking politely for JSON, so small models stay on-schema. Both providers sit
 behind one interface; the agents never know which is in use.
 
-**PayPal AI Toolkit** — installed as a Claude Code plugin. `/paypal:doctor` audited
-the integration and found the two webhook security bugs described above; its
-`paypal-best-practices` reference is what flagged our auto-accept behaviour as
-contrary to PayPal's guidance.
+**PayPal AI Toolkit** — used as a *development* tool, not a runtime dependency.
+Installed as a Claude Code plugin; `/paypal:doctor` audited the integration and found
+both webhook security bugs described above, and its `paypal-best-practices` reference
+is what flagged our auto-accept behaviour as contrary to PayPal's guidance. Two
+commits exist because of it. The app itself ships no PayPal SDK — it talks to the
+REST API through its own client.
+
+**Not used: PayPal's MCP server.** Worth stating plainly rather than leaving to
+inference. We call the REST API directly because it reaches further than the MCP
+server exposes — ten API families including disputes, transaction search, shipment
+tracking and webhook management — and because the MCP endpoint returned 404 on every
+documented path from this account during the build. Adding it to tick a box would
+have been the bolted-on integration PayPal warned against.
 
 **AG Grid Enterprise** — the three operator queues. Row grouping by the unit each
 queue is actually worked in (risk tier, precursor type, dispute reason code, audit
