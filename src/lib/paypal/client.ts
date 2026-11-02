@@ -63,7 +63,7 @@ export class PayPalError extends Error {
 }
 
 export type RequestOptions = {
-  method?: "GET" | "POST" | "PATCH" | "PUT";
+  method?: "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
   body?: unknown;
   query?: Record<string, string | number | undefined>;
   /** PayPal requires this on order/refund creation to make retries safe. */

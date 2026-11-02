@@ -62,6 +62,8 @@ Set in `.env`, enforced in code:
 
 A rebuttal always needs a human: it goes out in the merchant's name.
 
+**Auto-accept ships disabled.** PayPal's integration guidance is explicit that a dispute claim should never be accepted automatically without review, so `AEGIS_AUTO_ACCEPT_CEILING_USD` defaults to `0` and a merchant has to opt in. With it off the Advocate still does all of the work — evidence, expected value, a recommendation, a drafted rebuttal — and a human presses the button. That is the intended shape: the agent removes the 40 minutes of assembly, not the decision. Before any `accept-claim` call the agent re-reads the dispute and checks `allowed_response_options`, because which actions are legal changes with the lifecycle stage.
+
 ## PayPal integration
 
 | Area | Endpoints |
@@ -73,9 +75,37 @@ A rebuttal always needs a human: it goes out in the merchant's name.
 | Shipment tracking | `POST /v1/shipping/trackers-batch`, `GET`/`PUT /v1/shipping/trackers/{id}` |
 | Invoicing | `POST /v2/invoicing/invoices`, `POST .../send`, `GET /v2/invoicing/invoices` |
 | Catalog | `POST /v1/catalogs/products` |
+| Webhooks | `POST /v1/notifications/verify-webhook-signature`, `GET`/`POST`/`DELETE /v1/notifications/webhooks`, `POST /v1/notifications/simulate-event` |
 | Subscriptions | `POST /v1/billing/plans`, `GET`/`POST /v1/billing/subscriptions/{id}` |
 
 All calls go through one client with token caching, idempotency keys on writes, and backoff on 429/5xx: [`src/lib/paypal/client.ts`](src/lib/paypal/client.ts).
+
+## Webhooks
+
+`POST /api/webhooks/paypal` is how a production dispute reaches Aegis. It follows PayPal's integration guidance exactly:
+
+- **Signature verified before anything is trusted.** An unverified endpoint accepts a POST from anyone, and this one creates disputes and can trigger refunds. Verification uses the **raw request body** — re-serializing the JSON changes the bytes the signature covers.
+- **200 returned inside PayPal's 30-second window**, with processing done after. Ingesting a dispute means a PayPal fetch plus a model call; doing that inline guarantees a timeout and a duplicate delivery.
+- **Idempotent.** PayPal retries for up to three days until it sees a 200, so the same event *will* arrive twice. Every delivery is recorded by its event id and a replay returns `200 duplicate` without re-running anything.
+- **Explicit event subscriptions**, not a wildcard.
+
+Unverified events are stored for inspection and never acted on. Verified behaviour, tested:
+
+| Request | Response |
+|---|---|
+| Missing any of the five `PAYPAL-*` headers | `400` |
+| Headers present, signature invalid | `401`, stored with `verified=false`, not processed |
+| Same event id twice | `200 duplicate`, no reprocessing |
+| Genuine `CUSTOMER.DISPUTE.CREATED` | `200 accepted`, dispute matched to its order by capture id, assessed by the Advocate, and any open watch on that order marked `ESCALATED_TO_DISPUTE` |
+
+```bash
+npm run webhook -- register https://<your-tunnel>/api/webhooks/paypal
+npm run webhook -- list          # then put the id in PAYPAL_WEBHOOK_ID
+npm run webhook -- simulate CUSTOMER.DISPUTE.CREATED
+curl localhost:3000/api/webhooks/paypal   # liveness + event counts
+```
+
+PayPal must reach the URL from the public internet, so use a tunnel (ngrok, cloudflared) locally. Note that `simulate-event` produces events that **can never pass real signature verification** — acting on one locally requires setting `AEGIS_WEBHOOK_ALLOW_UNVERIFIED=true`, which the handler warns about loudly and which must never be set in production.
 
 ## Running it
 
@@ -130,7 +160,9 @@ The PayPal sandbox cannot originate two things, and Aegis does not pretend other
 
 **What is real.** Catalog products, subscription plans, invoices (created and sent), and orders are created through the live sandbox REST API and read back by id. Every *action* the agents take — refunds, accept-claim, shipment tracking — runs against the live sandbox.
 
-**What is not.** (1) Payment capture requires buyer approval in a browser, so where the sandbox app has no card processing enabled the seeder stores the order with a locally generated capture id. (2) Inbound buyer disputes cannot be filed against a sandbox merchant at all, so disputes are fixtures — and they enter through the same code path a production webhook would use.
+**What is not.** (1) Payment capture needs either buyer approval in a browser or Advanced Card Payments enabled on the sandbox business account; without it an order is real and fetchable by id but stays `CREATED`, which the row records as `LIVE_UNCAPTURED` rather than claiming a capture that did not happen. (2) Inbound buyer disputes cannot be filed against a sandbox merchant at all, so the seeded disputes are fixtures.
+
+Seeded fixtures are written straight to the database and marked `SIMULATED`. A **real** dispute arrives through [`/api/webhooks/paypal`](src/app/api/webhooks/paypal/route.ts) and is marked `LIVE_SANDBOX` — that path is implemented, signature-verified and tested, not a stub.
 
 Every row carries a `source` column of `LIVE_SANDBOX` or `SIMULATED`, the console badges simulated rows, and the seeder prints the split on every run. The seeding logic and this reasoning are documented in [`scripts/seed.ts`](scripts/seed.ts).
 
@@ -150,7 +182,12 @@ src/agents/interceptor.ts pre-dispute deflection
 src/agents/advocate.ts    dispute defense
 src/agents/learner.ts     outcome → rule
 src/agents/metrics.ts     the numbers the console leads with
+src/app/api/webhooks/     PayPal webhook receiver (verify, 200-fast, idempotent)
+src/agents/ingest.ts      webhook event -> domain handlers
 scripts/seed.ts           90-day history seeder
+scripts/webhook.ts        register / list / simulate / delete subscriptions
+scripts/paypal-check.ts   exercise every PayPal endpoint Aegis uses
+scripts/ai-check.ts       which model provider is live
 scripts/run-agents.ts     one pass of the full loop
 ```
 

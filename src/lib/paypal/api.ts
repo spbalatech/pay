@@ -135,6 +135,9 @@ export type PayPalDispute = {
   dispute_state?: string;
   dispute_amount?: { currency_code: string; value: string };
   seller_response_due_date?: string;
+  dispute_life_cycle_stage?: string;
+  /** What PayPal will accept right now; changes with the lifecycle stage. */
+  allowed_response_options?: { allowed_response_options?: string[] };
   disputed_transactions?: Array<{
     seller_transaction_id?: string;
     buyer_transaction_id?: string;

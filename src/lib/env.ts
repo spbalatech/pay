@@ -36,7 +36,17 @@ const schema = z.object({
   OLLAMA_MODEL_FAST: optionalStr(),
   AEGIS_OLLAMA_TIMEOUT_MS: z.coerce.number().default(120_000),
   DATABASE_URL: z.string().min(1),
-  AEGIS_AUTO_ACCEPT_CEILING_USD: z.coerce.number().default(35),
+
+  // From the webhook you register in the PayPal dashboard. Required to verify
+  // signatures; without it the receiver rejects everything.
+  PAYPAL_WEBHOOK_ID: optionalStr(),
+  // LOCAL TESTING ONLY. PayPal's simulate-event endpoint emits events that can
+  // never pass real signature verification, so exercising the handler against
+  // it requires explicitly accepting unverified deliveries.
+  AEGIS_WEBHOOK_ALLOW_UNVERIFIED: z.coerce.boolean().default(false),
+  // Off by default: PayPal's guidance is never to accept a claim without
+  // review. A merchant can opt in by setting a ceiling above zero.
+  AEGIS_AUTO_ACCEPT_CEILING_USD: z.coerce.number().default(0),
   AEGIS_AUTO_REFUND_CEILING_USD: z.coerce.number().default(25),
   AEGIS_HOLD_THRESHOLD: z.coerce.number().default(70),
 });
@@ -78,6 +88,7 @@ export function capabilities(): Capabilities {
 
   const missing: string[] = [];
   if (!paypal) missing.push("PAYPAL_CLIENT_ID / PAYPAL_CLIENT_SECRET");
+  if (!isRealSecret(e.PAYPAL_WEBHOOK_ID)) missing.push("PAYPAL_WEBHOOK_ID");
 
   return { paypal, aiConfigured, missing };
 }

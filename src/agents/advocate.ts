@@ -10,7 +10,7 @@
 import { db, audit } from "@/lib/db";
 import { policy } from "@/lib/env";
 import { generate } from "@/lib/ai";
-import { acceptDisputeClaim } from "@/lib/paypal/api";
+import { acceptDisputeClaim, getDispute } from "@/lib/paypal/api";
 import {
   checklistFor,
   evidenceStrength,
@@ -266,6 +266,17 @@ export async function executeDecision(
 
   if (decision === "ACCEPT") {
     if (dispute.source === "LIVE_SANDBOX") {
+      // Which actions are legal changes with the dispute's lifecycle stage,
+      // so PayPal's current answer is checked rather than assumed.
+      const live = await getDispute(dispute.paypalDisputeId);
+      const allowed = live.allowed_response_options?.allowed_response_options;
+      if (allowed && !allowed.includes("ACCEPT_CLAIM")) {
+        throw new Error(
+          `PayPal does not currently allow ACCEPT_CLAIM on ${dispute.paypalDisputeId} ` +
+            `(stage ${live.dispute_life_cycle_stage ?? "unknown"}; allowed: ${allowed.join(", ")}).`,
+        );
+      }
+
       await acceptDisputeClaim(
         dispute.paypalDisputeId,
         "Accepting the claim; refund issued to the buyer.",
@@ -305,7 +316,17 @@ export async function executeDecision(
   return db.dispute.findUniqueOrThrow({ where: { id: dispute.id }, include: { assessment: true } });
 }
 
-/** Assess every open dispute, then auto-accept the ones policy allows. */
+/**
+ * Assess every open dispute.
+ *
+ * PayPal's own integration guidance is explicit: never automatically accept a
+ * dispute claim without review. So auto-accept ships DISABLED
+ * (AEGIS_AUTO_ACCEPT_CEILING_USD=0) and a merchant who wants it must set a
+ * ceiling themselves. With it off, the Advocate still does all the work -
+ * evidence, expected value, a recommendation and a drafted rebuttal - and a
+ * human presses the button. That is the intended shape of the product; the
+ * agent removes the 40 minutes of assembly, not the decision.
+ */
 export async function runAdvocate() {
   const { autoAcceptCeiling } = policy();
 
@@ -319,6 +340,7 @@ export async function runAdvocate() {
     const { assessment, ev } = await assessDispute(d.id);
 
     const shouldAutoAccept =
+      autoAcceptCeiling > 0 &&
       ev.recommendation === "ACCEPT" &&
       Number(d.amount) <= autoAcceptCeiling &&
       assessment.decisionStatus === "PROPOSED";

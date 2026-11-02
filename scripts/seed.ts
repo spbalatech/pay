@@ -16,8 +16,10 @@
  *      order is stored with a locally generated capture id and marked
  *      source=SIMULATED.
  *   2. Inbound buyer disputes cannot be filed against a sandbox merchant at
- *      all. These are fixtures, always marked source=SIMULATED, and they
- *      enter through the same code path a real webhook would use.
+ *      all. These are fixtures, written straight to the database and always
+ *      marked source=SIMULATED. A real dispute arrives instead through
+ *      /api/webhooks/paypal, which is implemented and signature-verified;
+ *      those are marked LIVE_SANDBOX.
  *
  * Every row carries its `source`, the console shows a badge for SIMULATED
  * rows, and all agent *actions* (refunds, accept-claim, tracking) run against

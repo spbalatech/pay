@@ -15,7 +15,8 @@
     "seed": "tsx scripts/seed.ts",
     "agents:run": "tsx scripts/run-agents.ts",
     "ai:check": "tsx scripts/ai-check.ts",
-    "paypal:check": "tsx scripts/paypal-check.ts"
+    "paypal:check": "tsx scripts/paypal-check.ts",
+    "webhook": "tsx scripts/webhook.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.32.1",

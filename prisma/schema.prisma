@@ -215,6 +215,11 @@ model Dispute {
   order            Order?   @relation(fields: [orderId], references: [id])
   reasonCode       String // ITEM_NOT_RECEIVED | UNAUTHORIZED | SIGNIFICANTLY_NOT_AS_DESCRIBED | DUPLICATE | ...
   status           String
+  /// INQUIRY -> CLAIM -> CHARGEBACK -> PRE_ARBITRATION -> ARBITRATION.
+  /// Which actions are legal depends on this, so it is never assumed.
+  lifeCycleStage   String?
+  /// What PayPal says we may do right now. Checked before any action call.
+  allowedResponses Json?
   amount           Decimal  @db.Decimal(12, 2)
   currency         String   @default("USD")
   buyerNote        String?  @db.Text
@@ -263,6 +268,28 @@ model Rule {
   createdAt      DateTime @default(now())
   approvedAt     DateTime?
   approvedBy     String?
+}
+
+/// Every webhook delivery PayPal makes, stored before it is acted on.
+/// The unique event id is what makes replays harmless: PayPal retries for up
+/// to three days until it sees a 200, so the same event WILL arrive twice.
+model WebhookEvent {
+  id              String   @id @default(cuid())
+  paypalEventId   String   @unique
+  eventType       String
+  resourceType    String?
+  summary         String?
+  payload         Json
+  /// False only when the signature could not be verified - which a simulated
+  /// event never can be. Unverified events are stored and rejected, never acted on,
+  /// unless the operator has explicitly opted in for local testing.
+  verified        Boolean  @default(false)
+  receivedAt      DateTime @default(now())
+  processedAt     DateTime?
+  processingError String?  @db.Text
+
+  @@index([eventType])
+  @@index([receivedAt])
 }
 
 model AuditLog {
