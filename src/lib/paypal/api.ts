@@ -276,6 +276,7 @@ export function createShipmentTracking(input: {
     "/v1/shipping/trackers-batch",
     {
       method: "POST",
+      idempotencyKey: randomUUID(),
       body: {
         trackers: [
           {
@@ -391,10 +392,18 @@ export const getSubscription = (id: string) =>
   paypal<PayPalSubscription>(`/v1/billing/subscriptions/${id}`);
 
 export const cancelSubscription = (id: string, reason: string) =>
-  paypal<void>(`/v1/billing/subscriptions/${id}/cancel`, { method: "POST", body: { reason } });
+  paypal<void>(`/v1/billing/subscriptions/${id}/cancel`, {
+    method: "POST",
+    idempotencyKey: randomUUID(),
+    body: { reason },
+  });
 
 export const suspendSubscription = (id: string, reason: string) =>
-  paypal<void>(`/v1/billing/subscriptions/${id}/suspend`, { method: "POST", body: { reason } });
+  paypal<void>(`/v1/billing/subscriptions/${id}/suspend`, {
+    method: "POST",
+    idempotencyKey: randomUUID(),
+    body: { reason },
+  });
 
 export function createProduct(input: { name: string; description: string; type?: string }) {
   return paypal<{ id: string; name: string }>("/v1/catalogs/products", {

@@ -49,9 +49,15 @@ const schema = z.object({
   // verification on an endpoint which creates disputes must never be able to
   // fail open, so only the literal strings are accepted and anything else
   // stops the process at boot.
+  // An empty value counts as absent, matching optionalStr() elsewhere: a
+  // blank line left in .env should not crash the app, and "unset" for this
+  // flag means off, which is the safe answer anyway. Any other junk still
+  // stops the process rather than being guessed at.
   AEGIS_WEBHOOK_ALLOW_UNVERIFIED: z
-    .enum(["true", "false"])
-    .default("false")
+    .preprocess(
+      (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+      z.enum(["true", "false"]).default("false"),
+    )
     .transform((v) => v === "true"),
   // Off by default: PayPal's guidance is never to accept a claim without
   // review. A merchant can opt in by setting a ceiling above zero.
