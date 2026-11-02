@@ -293,6 +293,15 @@ ul.plain li::before {
   margin-bottom: 9px;
   flex-wrap: wrap;
 }
+.hint {
+  text-transform: none;
+  letter-spacing: 0;
+  font-family: var(--sans);
+  font-size: 11.5px;
+  color: var(--ink-3);
+  opacity: 0.8;
+}
+.hint::before { content: "· "; }
 .figtitle {
   font-family: var(--mono);
   font-size: 11px;
@@ -322,24 +331,33 @@ ul.plain li::before {
   padding: 20px 16px;
   overflow: auto;
   min-height: 90px;
+  max-height: 68vh;
+  overscroll-behavior: contain;
 }
-.diagram pre.mermaid { background: none; border: 0; padding: 0; margin: 0; overflow: visible; text-align: center; }
-.diagram svg { max-width: 100%; height: auto; }
+.diagram.expanded { max-height: none; }
+.diagram .mmd { text-align: center; }
+.diagram svg { max-width: none; height: auto; }
 
-/* Expanded: fills the viewport whether or not the Fullscreen API is granted. */
+/* Expanded: a plain fixed overlay. The Fullscreen API is deliberately not
+   used - a fullscreen root that is also position:fixed renders at its
+   original size against a black backdrop in several browsers. */
 .diagram.expanded {
   position: fixed;
   inset: 0;
   z-index: 60;
-  border-radius: 0;
   border: 0;
-  padding: 64px 24px 24px;
+  border-radius: 0;
+  background: var(--paper);
+  padding: 58px max(20px, env(safe-area-inset-left, 0px)) 28px;
+  overflow: auto;
+}
+.diagram.expanded .mmd {
+  min-height: 100%;
+  min-width: min-content;
   display: grid;
   place-items: center;
 }
-.diagram.expanded svg { max-width: 100%; max-height: 100%; width: auto; }
-.diagram:fullscreen { background: var(--surface); padding: 64px 24px 24px; display: grid; place-items: center; }
-.diagram:fullscreen svg { max-width: 100%; max-height: 100%; }
+.diagram.expanded svg { max-width: none; height: auto; }
 
 .closebar {
   position: fixed;
@@ -561,74 +579,10 @@ curl localhost:3000/api/webhooks/paypal            <span class="c"># liveness + 
 
     <figure class="figure">
       <div class="figbar">
-        <span class="figtitle">Fig. 1 — System</span>
+        <span class="figtitle">Fig. 1 — System <span class="hint">scrolls sideways</span></span>
         <button class="btn" data-expand="d1">Maximize</button>
       </div>
-      <div class="diagram" id="d1">
-<pre class="mermaid">
-flowchart TB
-  subgraph PP["PayPal Developer Platform"]
-    direction LR
-    ORD["Orders &amp; Payments"]
-    DIS["Disputes"]
-    TRK["Shipment tracking"]
-    TXN["Transaction search"]
-    INV["Invoicing"]
-    SUB["Subscriptions"]
-    WHK["Webhooks"]
-  end
-
-  subgraph CORE["Aegis"]
-    direction TB
-    CLIENT["REST client<br/><small>token cache · idempotency keys · backoff</small>"]
-    RECV["Webhook receiver<br/><small>verify · 200 fast · idempotent</small>"]
-
-    subgraph AGENTS["The loop"]
-      direction LR
-      S["SENTINEL<br/><small>order risk</small>"]
-      I["INTERCEPTOR<br/><small>pre-dispute deflection</small>"]
-      A["ADVOCATE<br/><small>dispute defense</small>"]
-      L["LEARNER<br/><small>outcome to rule</small>"]
-    end
-
-    DET["Signal engine &amp; EV engine<br/><small>deterministic arithmetic — no model</small>"]
-    RULES["Rulebook<br/><small>closed predicate language</small>"]
-    DB[("Postgres<br/><small>orders · watches · disputes<br/>rules · audit log</small>")]
-  end
-
-  AI["Model provider<br/><small>Claude or local Llama</small>"]
-  UI["Operations console<br/><small>AG Grid queues · approvals</small>"]
-  HUMAN(["Merchant"])
-
-  PP <--> CLIENT
-  WHK -. "signed events" .-> RECV
-  CLIENT --> AGENTS
-  RECV --> A
-
-  DET --> S
-  DET --> A
-  S <--> DB
-  I <--> DB
-  A <--> DB
-  L <--> DB
-
-  S --> I --> A --> L
-  L -- "proposes rule" --> RULES
-  RULES -- "enforced on new orders" --> S
-
-  AGENTS -. "drafting only" .-> AI
-  DB --> UI
-  UI --> HUMAN
-  HUMAN -- "approves · overrides" --> UI
-
-  classDef prevent stroke:#2a78d6,stroke-width:2px
-  classDef defend stroke:#c25410,stroke-width:2px
-  classDef learn stroke:#0b7a38,stroke-width:2px
-  class S,I prevent
-  class A defend
-  class L,RULES learn
-</pre>
-      </div>
+      <div class="diagram" id="d1" aria-busy="true"></div>
       <figcaption class="figcap">
         Scores and expected values come from the deterministic engine. The model is reached only
         for drafting and rule proposal — the dotted line.
@@ -659,52 +613,10 @@ flowchart TB
 
     <figure class="figure">
       <div class="figbar">
-        <span class="figtitle">Fig. 2 — Order lifecycle</span>
+        <span class="figtitle">Fig. 2 — Order lifecycle <span class="hint">scrolls sideways</span></span>
         <button class="btn" data-expand="d2">Maximize</button>
       </div>
-      <div class="diagram" id="d2">
-<pre class="mermaid">
-flowchart LR
-  P["Order placed<br/><small>$184 · apartment address<br/>first-time payer</small>"]
-  S{"SENTINEL<br/>score 46"}
-  HOLD["Held for verification"]
-  SHIP["Ships"]
-  W{"INTERCEPTOR<br/>day 7"}
-  OK["Delivered<br/>no dispute"]
-  DEF["Deflected<br/><small>outreach sent · buyer replies<br/>to the merchant, not their bank</small>"]
-  D["Dispute filed"]
-  ADV{"ADVOCATE<br/>EV decision"}
-  FIGHT["Fight<br/><small>rebuttal drafted,<br/>evidence cited</small>"]
-  ACC["Accept &amp; refund<br/><small>winning costs more<br/>than the claim</small>"]
-  OUT["Outcome recorded"]
-  LRN["LEARNER<br/><small>'4 of your last 6 losses were<br/>over $150 to multi-unit addresses<br/>without signature'</small>"]
-  RULE["Rule approved<br/>by the merchant"]
-
-  P --> S
-  S -- "70+" --> HOLD
-  S -- "below 70" --> SHIP
-  SHIP --> W
-  W -- "tracking moving" --> OK
-  W -- "stalled 5 days" --> DEF
-  DEF -. "intervention declined<br/>or too late" .-> D
-  D --> ADV
-  ADV -- "evidence 85%" --> FIGHT
-  ADV -- "evidence 0%" --> ACC
-  FIGHT --> OUT
-  ACC --> OUT
-  OUT --> LRN --> RULE
-  RULE == "enforced on every future order" ==> S
-
-  classDef prevent stroke:#2a78d6,stroke-width:2px
-  classDef defend stroke:#c25410,stroke-width:2px
-  classDef learn stroke:#0b7a38,stroke-width:2px
-  classDef quiet fill:none,stroke:#878d97,stroke-dasharray:3 3
-  class S,W,HOLD,DEF prevent
-  class ADV,FIGHT,ACC,D defend
-  class LRN,RULE learn
-  class OK quiet
-</pre>
-      </div>
+      <div class="diagram" id="d2" aria-busy="true"></div>
       <figcaption class="figcap">
         The thick arrow at the bottom closes the loop. Without it this is two tools; with it the
         same loss stops recurring.
@@ -713,43 +625,10 @@ flowchart LR
 
     <figure class="figure" style="margin-top:34px">
       <div class="figbar">
-        <span class="figtitle">Fig. 3 — A real dispute arriving by webhook</span>
+        <span class="figtitle">Fig. 3 — A real dispute arriving by webhook <span class="hint">scrolls</span></span>
         <button class="btn" data-expand="d3">Maximize</button>
       </div>
-      <div class="diagram" id="d3">
-<pre class="mermaid">
-sequenceDiagram
-  autonumber
-  participant B as Buyer
-  participant PP as PayPal
-  participant R as Webhook receiver
-  participant DB as Postgres
-  participant AD as Advocate
-
-  B->>PP: Files a dispute
-  PP->>R: POST CUSTOMER.DISPUTE.CREATED
-  Note over R: Read the RAW body.<br/>Re-serializing breaks the signature.
-  R->>DB: Seen this event id before?
-  DB-->>R: No
-  R->>PP: verify-webhook-signature
-  PP-->>R: SUCCESS
-
-  rect rgba(42,120,214,0.08)
-    Note over R,DB: Nothing is persisted until the<br/>signature is accepted — a forged id<br/>must not suppress the real delivery.
-    R->>DB: Record the event
-  end
-
-  R-->>PP: 200 accepted
-  Note over R,PP: Answered inside the 30s window.<br/>The work happens after.
-
-  R->>PP: GET the full dispute
-  PP-->>R: Reason code, stage, due date
-  R->>DB: Match to its order by capture id
-  R->>AD: Assess
-  AD->>DB: Evidence, P(win), EV, drafted rebuttal
-  AD->>DB: Mark open watches ESCALATED_TO_DISPUTE
-</pre>
-      </div>
+      <div class="diagram" id="d3" aria-busy="true"></div>
       <figcaption class="figcap">
         Tested: missing headers return 400, a bad signature 401 with nothing written, a replay 200
         duplicate, and a forged event id cannot suppress the genuine delivery that follows.
@@ -953,11 +832,152 @@ sequenceDiagram
 (function () {
   "use strict";
 
-  var sources = {};
-  document.querySelectorAll("pre.mermaid").forEach(function (el, i) {
-    el.dataset.key = "m" + i;
-    sources["m" + i] = el.textContent;
-  });
+  /* Diagram sources live here, not in the HTML.
+     Inside <pre class="mermaid"> the browser parses <br/> and <small> as real
+     elements, so textContent silently drops them and every multi-line label
+     collapses into one run-on string. Keeping the source in JavaScript means
+     mermaid receives the markup it is meant to interpret itself. */
+  var SOURCES = {
+    d1: `
+flowchart TB
+  subgraph PP["PayPal Developer Platform"]
+    direction LR
+    ORD["Orders & Payments"]
+    DIS["Disputes"]
+    TRK["Shipment tracking"]
+    TXN["Transaction search"]
+    INV["Invoicing"]
+    SUB["Subscriptions"]
+    WHK["Webhooks"]
+  end
+
+  subgraph CORE["Aegis"]
+    direction TB
+    CLIENT["REST client<br/><small>token cache · idempotency keys · backoff</small>"]
+    RECV["Webhook receiver<br/><small>verify · 200 fast · idempotent</small>"]
+
+    subgraph AGENTS["The loop"]
+      direction LR
+      S["SENTINEL<br/><small>order risk</small>"]
+      I["INTERCEPTOR<br/><small>pre-dispute deflection</small>"]
+      A["ADVOCATE<br/><small>dispute defense</small>"]
+      L["LEARNER<br/><small>outcome to rule</small>"]
+    end
+
+    DET["Signal engine & EV engine<br/><small>deterministic arithmetic — no model</small>"]
+    RULES["Rulebook<br/><small>closed predicate language</small>"]
+    DB[("Postgres<br/><small>orders · watches · disputes<br/>rules · audit log</small>")]
+  end
+
+  AI["Model provider<br/><small>Claude or local Llama</small>"]
+  UI["Operations console<br/><small>AG Grid queues · approvals</small>"]
+  HUMAN(["Merchant"])
+
+  PP <--> CLIENT
+  WHK -. "signed events" .-> RECV
+  CLIENT --> AGENTS
+  RECV --> A
+
+  DET --> S
+  DET --> A
+  S <--> DB
+  I <--> DB
+  A <--> DB
+  L <--> DB
+
+  S --> I --> A --> L
+  L -- "proposes rule" --> RULES
+  RULES -- "enforced on new orders" --> S
+
+  AGENTS -. "drafting only" .-> AI
+  DB --> UI
+  UI --> HUMAN
+  HUMAN -- "approves · overrides" --> UI
+
+  classDef prevent stroke:#2a78d6,stroke-width:2px
+  classDef defend stroke:#c25410,stroke-width:2px
+  classDef learn stroke:#0b7a38,stroke-width:2px
+  class S,I prevent
+  class A defend
+  class L,RULES learn
+`,
+    d2: `
+flowchart LR
+  P["Order placed<br/><small>$184 · apartment address<br/>first-time payer</small>"]
+  S{"SENTINEL<br/>score 46"}
+  HOLD["Held for verification"]
+  SHIP["Ships"]
+  W{"INTERCEPTOR<br/>day 7"}
+  OK["Delivered<br/>no dispute"]
+  DEF["Deflected<br/><small>outreach sent · buyer replies<br/>to the merchant, not their bank</small>"]
+  D["Dispute filed"]
+  ADV{"ADVOCATE<br/>EV decision"}
+  FIGHT["Fight<br/><small>rebuttal drafted,<br/>evidence cited</small>"]
+  ACC["Accept & refund<br/><small>winning costs more<br/>than the claim</small>"]
+  OUT["Outcome recorded"]
+  LRN["LEARNER<br/><small>'4 of your last 6 losses were<br/>over $150 to multi-unit addresses<br/>without signature'</small>"]
+  RULE["Rule approved<br/>by the merchant"]
+
+  P --> S
+  S -- "70+" --> HOLD
+  S -- "below 70" --> SHIP
+  SHIP --> W
+  W -- "tracking moving" --> OK
+  W -- "stalled 5 days" --> DEF
+  DEF -. "intervention declined<br/>or too late" .-> D
+  D --> ADV
+  ADV -- "evidence 85%" --> FIGHT
+  ADV -- "evidence 0%" --> ACC
+  FIGHT --> OUT
+  ACC --> OUT
+  OUT --> LRN --> RULE
+  RULE == "enforced on every future order" ==> S
+
+  classDef prevent stroke:#2a78d6,stroke-width:2px
+  classDef defend stroke:#c25410,stroke-width:2px
+  classDef learn stroke:#0b7a38,stroke-width:2px
+  classDef quiet fill:none,stroke:#878d97,stroke-dasharray:3 3
+  class S,W,HOLD,DEF prevent
+  class ADV,FIGHT,ACC,D defend
+  class LRN,RULE learn
+  class OK quiet
+`,
+    d3: `
+sequenceDiagram
+  autonumber
+  participant B as Buyer
+  participant PP as PayPal
+  participant R as Webhook receiver
+  participant DB as Postgres
+  participant AD as Advocate
+
+  B->>PP: Files a dispute
+  PP->>R: POST CUSTOMER.DISPUTE.CREATED
+  Note over R: Read the RAW body.<br/>Re-serializing breaks the signature.
+  R->>DB: Seen this event id before?
+  DB-->>R: No
+  R->>PP: verify-webhook-signature
+  PP-->>R: SUCCESS
+
+  rect rgba(42,120,214,0.08)
+    Note over R,DB: Nothing is persisted until the<br/>signature is accepted — a forged id<br/>must not suppress the real delivery.
+    R->>DB: Record the event
+  end
+
+  R-->>PP: 200 accepted
+  Note over R,PP: Answered inside the 30s window.<br/>The work happens after.
+
+  R->>PP: GET the full dispute
+  PP-->>R: Reason code, stage, due date
+  R->>DB: Match to its order by capture id
+  R->>AD: Assess
+  AD->>DB: Evidence, P(win), EV, drafted rebuttal
+  AD->>DB: Mark open watches ESCALATED_TO_DISPUTE
+`
+  };
+
+  var diagrams = Object.keys(SOURCES);
+  var seq = 0;
 
   function darkMode() {
     var attr = document.documentElement.getAttribute("data-theme");
@@ -970,17 +990,15 @@ sequenceDiagram
     return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
   }
 
-  function render() {
-    if (!window.mermaid) return;
+  function configure() {
     var dark = darkMode();
-
     mermaid.initialize({
       startOnLoad: false,
-      securityLevel: "strict",
+      securityLevel: "loose",
       theme: "base",
       fontFamily: '"IBM Plex Sans", system-ui, sans-serif',
-      flowchart: { curve: "basis", nodeSpacing: 42, rankSpacing: 54, htmlLabels: true },
-      sequence: { useMaxWidth: true, wrap: true },
+      flowchart: { curve: "basis", nodeSpacing: 42, rankSpacing: 54, htmlLabels: true, useMaxWidth: false },
+      sequence: { useMaxWidth: false, wrap: false },
       themeVariables: {
         background: cssVar("--surface"),
         primaryColor: dark ? "#202327" : "#f5f6f8",
@@ -1001,37 +1019,60 @@ sequenceDiagram
         noteBkgColor: cssVar("--sunk"),
         noteTextColor: cssVar("--ink-2"),
         noteBorderColor: cssVar("--rule"),
+        signalColor: cssVar("--ink-2"),
+        signalTextColor: cssVar("--ink"),
+        labelBoxBkgColor: cssVar("--sunk"),
+        labelBoxBorderColor: cssVar("--rule"),
+        labelTextColor: cssVar("--ink"),
+        loopTextColor: cssVar("--ink"),
         sequenceNumberColor: cssVar("--paper"),
         fontSize: "14px"
       }
     });
+  }
 
-    // Restore the original source before each pass: mermaid replaces the
-    // element's contents with SVG, so a re-render needs the text back.
-    var nodes = document.querySelectorAll("pre.mermaid");
-    nodes.forEach(function (el) {
-      el.removeAttribute("data-processed");
-      el.textContent = sources[el.dataset.key];
+  function render() {
+    if (!window.mermaid) return;
+    configure();
+
+    diagrams.forEach(function (key) {
+      var host = document.getElementById(key);
+      if (!host) return;
+
+      mermaid
+        .render("mmd-" + key + "-" + seq++, SOURCES[key])
+        .then(function (res) {
+          host.innerHTML = '<div class="mmd">' + res.svg + "</div>";
+          host.removeAttribute("aria-busy");
+          if (typeof res.bindFunctions === "function") res.bindFunctions(host);
+        })
+        .catch(function (err) {
+          host.removeAttribute("aria-busy");
+          host.innerHTML =
+            '<p style="margin:0;color:var(--ink-3);font-size:13px">' +
+            "This diagram did not render: " +
+            String(err && err.message ? err.message : err).replace(/[<>&]/g, " ") +
+            "</p>";
+        });
     });
-
-    try {
-      mermaid.run({ nodes: nodes });
-    } catch (err) {
-      nodes.forEach(function (el) {
-        el.textContent = "Diagram failed to render: " + err;
-      });
-    }
   }
 
   if (window.mermaid) {
     render();
   } else {
-    document.querySelectorAll(".diagram").forEach(function (d) {
-      d.textContent = "Mermaid could not be loaded from the CDN. The diagram source is in the page source.";
+    diagrams.forEach(function (key) {
+      var host = document.getElementById(key);
+      if (host) {
+        host.removeAttribute("aria-busy");
+        host.innerHTML =
+          '<p style="margin:0;color:var(--ink-3);font-size:13px">' +
+          "Mermaid could not be loaded from the CDN, so the diagrams are unavailable offline." +
+          "</p>";
+      }
     });
   }
 
-  // Re-render on theme change so the diagrams never sit in the other palette.
+  // Re-render on theme change, so a diagram never sits in the other palette.
   var mq = window.matchMedia("(prefers-color-scheme: dark)");
   if (mq.addEventListener) mq.addEventListener("change", render);
 
@@ -1039,17 +1080,15 @@ sequenceDiagram
 
   var closebar = document.getElementById("closebar");
   var current = null;
+  var lastFocus = null;
 
   function expand(el) {
     current = el;
+    lastFocus = document.activeElement;
     el.classList.add("expanded");
     closebar.classList.add("on");
     document.body.style.overflow = "hidden";
-    // Fullscreen is a nicety: phones and some webviews refuse it, and the
-    // .expanded class already fills the viewport on its own.
-    if (el.requestFullscreen) {
-      el.requestFullscreen().catch(function () {});
-    }
+    document.getElementById("closebtn").focus();
   }
 
   function collapse() {
@@ -1057,10 +1096,8 @@ sequenceDiagram
     current.classList.remove("expanded");
     closebar.classList.remove("on");
     document.body.style.overflow = "";
-    if (document.fullscreenElement && document.exitFullscreen) {
-      document.exitFullscreen().catch(function () {});
-    }
     current = null;
+    if (lastFocus && lastFocus.focus) lastFocus.focus();
   }
 
   document.querySelectorAll("[data-expand]").forEach(function (btn) {
@@ -1074,11 +1111,6 @@ sequenceDiagram
 
   document.addEventListener("keydown", function (e) {
     if (e.key === "Escape" && current) collapse();
-  });
-
-  document.addEventListener("fullscreenchange", function () {
-    // Leaving fullscreen by the browser's own control should also leave ours.
-    if (!document.fullscreenElement && current) collapse();
   });
 })();
 </script>
