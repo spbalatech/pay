@@ -3,10 +3,12 @@ import { dashboardMetrics } from "@/agents/metrics";
 import { Hero, Tile, SegmentedBar, money, pct } from "@/components/Tiles";
 import { RunLoopButton } from "@/components/RunLoopButton";
 import { db } from "@/lib/db";
+import { capabilities } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
 
 export default async function Overview() {
+  const caps = capabilities();
   let m: Awaited<ReturnType<typeof dashboardMetrics>> | null = null;
   let simulatedShare: { total: number; simulated: number } | null = null;
 
@@ -45,6 +47,18 @@ npm run agents:run`}</pre>
           dispute that never happened is the cheapest one.
         </p>
       </div>
+
+      {caps.missing.length > 0 ? (
+        <div className="notice">
+          <span aria-hidden>⚙</span>
+          <span>
+            Running without {caps.missing.join(" and ")}. The console, the seeder and
+            {caps.ai ? " " : " three of "} the four agents work regardless
+            {caps.ai ? "" : " — only the Learner needs a model to propose rules"}. Add the
+            values to <code>.env</code> and restart to switch the rest on.
+          </span>
+        </div>
+      ) : null}
 
       {simulatedShare && simulatedShare.simulated > 0 ? (
         <div className="notice">

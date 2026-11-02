@@ -13,6 +13,7 @@
  */
 import { db, audit } from "@/lib/db";
 import { generateStructured } from "@/lib/ai/claude";
+import { hasAI } from "@/lib/env";
 import { PREDICATE_FIELDS, RULE_ACTIONS, type RuleCondition } from "./rules";
 import { DISPUTE_FEE_USD } from "./ev";
 import { z } from "zod";
@@ -151,6 +152,13 @@ export async function collectLossPatterns(): Promise<LossPattern[]> {
 }
 
 export async function proposeRules() {
+  if (!hasAI()) {
+    return {
+      proposed: [],
+      reason: "ANTHROPIC_API_KEY is not set, so no rules can be proposed yet. Everything else runs.",
+    };
+  }
+
   const patterns = await collectLossPatterns();
 
   if (patterns.length < MIN_CLUSTER) {

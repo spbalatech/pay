@@ -1,4 +1,4 @@
-import { env } from "@/lib/env";
+import { env, hasPayPal } from "@/lib/env";
 
 const HOSTS = {
   SANDBOX: "https://api-m.sandbox.paypal.com",
@@ -14,6 +14,10 @@ function host() {
 
 async function accessToken(): Promise<string> {
   if (tokenCache && Date.now() < tokenCache.expiresAt - 60_000) return tokenCache.token;
+
+  if (!hasPayPal()) {
+    throw new PayPalCredentialsMissing();
+  }
 
   const { PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET } = env();
   const basic = Buffer.from(`${PAYPAL_CLIENT_ID}:${PAYPAL_CLIENT_SECRET}`).toString("base64");
@@ -34,6 +38,17 @@ async function accessToken(): Promise<string> {
   const json = (await res.json()) as { access_token: string; expires_in: number };
   tokenCache = { token: json.access_token, expiresAt: Date.now() + json.expires_in * 1000 };
   return tokenCache.token;
+}
+
+/** Thrown instead of a 401 when no sandbox credentials are configured yet. */
+export class PayPalCredentialsMissing extends Error {
+  constructor() {
+    super(
+      "PayPal sandbox credentials are not configured. Set PAYPAL_CLIENT_ID and " +
+        "PAYPAL_CLIENT_SECRET in .env, or run the seeder with --offline.",
+    );
+    this.name = "PayPalCredentialsMissing";
+  }
 }
 
 export class PayPalError extends Error {

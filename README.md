@@ -96,16 +96,31 @@ npm run agents:run       # one full pass of the loop
 npm run dev              # console at http://localhost:3000
 ```
 
-Required in `.env`:
+Only `DATABASE_URL` is required to start:
 
 ```
-PAYPAL_CLIENT_ID=          # sandbox app credentials
-PAYPAL_CLIENT_SECRET=
-ANTHROPIC_API_KEY=
 DATABASE_URL=postgresql://aegis:aegis@localhost:55439/aegis
+PAYPAL_CLIENT_ID=          # optional — sandbox app credentials
+PAYPAL_CLIENT_SECRET=      # optional
+ANTHROPIC_API_KEY=         # optional
 ```
 
-`npm run seed -- --offline` seeds without touching PayPal, if you want to see the agents work before adding credentials.
+### Running without credentials
+
+PayPal sandbox approval can take days and phone verification fails outright in
+some countries, so the app treats missing credentials as a supported state
+rather than a crash. `npm run seed -- --offline` seeds a complete 90-day
+history without calling PayPal, and the console names what is switched off.
+
+| Missing | What still works | What stops |
+|---|---|---|
+| PayPal credentials | Everything in the console; all four agents; the full offline seeder | Live sandbox writes — real orders, invoices, refunds, accept-claim, tracking |
+| `ANTHROPIC_API_KEY` | Sentinel, Interceptor and Advocate in full — their scores and expected values are arithmetic, not model output | The Learner proposes no rules; narratives and drafted messages fall back to plain summaries |
+| Both | Risk scoring, precursor detection, EV decisions, the whole UI | As above |
+
+That the first three agents keep working without a model is not a fallback —
+it is the architecture. Only the parts that are genuinely language work depend
+on one.
 
 ## About the demo data — please read
 
