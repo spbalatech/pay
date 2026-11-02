@@ -1,7 +1,8 @@
 import { env } from "@/lib/env";
 import { callTool } from "./mcp";
 import * as rest from "./api";
-import type { PayPalDispute, PayPalRefund, PayPalInvoice } from "./api";
+import { TransactionSearchDisabled } from "./api";
+import type { PayPalDispute, PayPalRefund, PayPalInvoice, PayPalTransaction } from "./api";
 
 /**
  * Transport-neutral PayPal operations.
@@ -110,3 +111,50 @@ export async function createInvoice(
     via: "rest",
   };
 }
+
+/**
+ * Transaction history for one payer.
+ *
+ * Transaction Search is a per-app feature that is off by default, so this
+ * reports unavailability rather than throwing: a dispute assessment must not
+ * fail because an optional evidence source is switched off.
+ */
+export type PayerHistoryResult =
+  | { available: true; transactions: PayPalTransaction[]; via: Transport }
+  | { available: false; reason: string };
+
+let transactionSearchOff: string | null = null;
+
+export async function payerTransactionHistory(
+  payerEmail: string,
+  since: Date,
+  until: Date = new Date(),
+  transport: Transport = activeTransport(),
+): Promise<PayerHistoryResult> {
+  // Once PayPal has said the feature is off, stop asking on every dispute.
+  if (transactionSearchOff) return { available: false, reason: transactionSearchOff };
+
+  try {
+    if (transport === "mcp") {
+      const { data } = await callTool<{ transaction_details?: PayPalTransaction[] }>("list_transactions", {
+        start_date: since.toISOString(),
+        end_date: until.toISOString(),
+        fields: "transaction_info,payer_info",
+      });
+      const all = data?.transaction_details ?? [];
+      return { available: true, transactions: all.filter((t) => matchesPayer(t, payerEmail)), via: "mcp" };
+    }
+
+    const all = await rest.listTransactions(since, until);
+    return { available: true, transactions: all.filter((t) => matchesPayer(t, payerEmail)), via: "rest" };
+  } catch (err) {
+    if (err instanceof TransactionSearchDisabled) {
+      transactionSearchOff = err.message;
+      return { available: false, reason: err.message };
+    }
+    return { available: false, reason: String(err).slice(0, 160) };
+  }
+}
+
+const matchesPayer = (t: PayPalTransaction, email: string) =>
+  (t.payer_info?.email_address ?? "").toLowerCase() === email.toLowerCase();

@@ -53,15 +53,22 @@ export const EVIDENCE_CHECKLIST: Record<string, Array<{ kind: string; weight: nu
     { kind: "REFUND_POLICY_DISCLOSED", weight: 15 },
   ],
   UNAUTHORIZED: [
-    { kind: "BILLING_SHIPPING_MATCH", weight: 30 },
-    { kind: "PAYER_HAS_PRIOR_ORDERS", weight: 30 },
-    { kind: "TRACKING_DELIVERED", weight: 25 },
-    { kind: "SIGNATURE_ON_DELIVERY", weight: 15 },
+    { kind: "BILLING_SHIPPING_MATCH", weight: 25 },
+    // A settled payment history at PayPal is the strongest answer to "I did not
+    // authorise this": the same payer has paid this merchant before and did
+    // not dispute it. Read from transaction search, not from our own records.
+    { kind: "PAYER_PAYMENT_HISTORY_AT_PAYPAL", weight: 30 },
+    { kind: "PAYER_HAS_PRIOR_ORDERS", weight: 15 },
+    { kind: "TRACKING_DELIVERED", weight: 20 },
+    { kind: "SIGNATURE_ON_DELIVERY", weight: 10 },
   ],
   DUPLICATE: [
-    { kind: "DISTINCT_CAPTURE_IDS", weight: 45 },
-    { kind: "DISTINCT_ORDER_CONTENTS", weight: 30 },
-    { kind: "DISTINCT_ORDER_DATES", weight: 25 },
+    { kind: "DISTINCT_CAPTURE_IDS", weight: 35 },
+    // Two settled transactions at PayPal for the same payer is what makes a
+    // duplicate claim refutable - or confirms it.
+    { kind: "SEPARATE_TRANSACTIONS_AT_PAYPAL", weight: 25 },
+    { kind: "DISTINCT_ORDER_CONTENTS", weight: 22 },
+    { kind: "DISTINCT_ORDER_DATES", weight: 18 },
   ],
   CREDIT_NOT_PROCESSED: [
     { kind: "REFUND_RECORD_EXISTS", weight: 60 },

@@ -11,6 +11,7 @@ import { db, audit } from "@/lib/db";
 import { policy } from "@/lib/env";
 import { generate } from "@/lib/ai";
 import { acceptDisputeClaim, getDispute } from "@/lib/paypal/api";
+import { payerTransactionHistory, type PayerHistoryResult } from "@/lib/paypal/transport";
 import {
   checklistFor,
   evidenceStrength,
@@ -36,11 +37,21 @@ Hard rules:
 
 /* -------------------------------------------------------------- evidence */
 
+/** What PayPal's own transaction record says about this payer. */
+export type PayerLedger = {
+  available: boolean;
+  reason?: string;
+  priorSettled: number;
+  priorRefunded: number;
+  matchingAmountCount: number;
+};
+
 export function buildEvidence(
   dispute: Dispute,
   order: Order | null,
   shipments: Shipment[],
   payerPriorOrders: number,
+  ledger: PayerLedger,
 ): EvidenceItem[] {
   const checklist = checklistFor(dispute.reasonCode);
   const delivered = shipments.find((s) => s.deliveredAt);
@@ -85,6 +96,28 @@ export function buildEvidence(
         return mk(kind, weight, payerPriorOrders > 0,
           `${payerPriorOrders} prior order(s) from this payer.`,
           order?.payerId);
+
+      case "PAYER_PAYMENT_HISTORY_AT_PAYPAL":
+        if (!ledger.available) {
+          return mk(kind, weight, false,
+            `Transaction history unavailable: ${ledger.reason ?? "transaction search is off for this app"}.`);
+        }
+        return mk(kind, weight, ledger.priorSettled > 0 && ledger.priorRefunded === 0,
+          ledger.priorSettled > 0
+            ? `${ledger.priorSettled} settled payment(s) from this payer at PayPal, ${ledger.priorRefunded} refunded.`
+            : "No prior settled payments from this payer at PayPal.",
+          order?.payerEmail);
+
+      case "SEPARATE_TRANSACTIONS_AT_PAYPAL":
+        if (!ledger.available) {
+          return mk(kind, weight, false,
+            `Transaction history unavailable: ${ledger.reason ?? "transaction search is off for this app"}.`);
+        }
+        return mk(kind, weight, ledger.matchingAmountCount <= 1,
+          ledger.matchingAmountCount <= 1
+            ? "Only one transaction at PayPal matches this amount, so the charge was not duplicated."
+            : `${ledger.matchingAmountCount} transactions at PayPal match this amount - the buyer may be right.`,
+          order?.captureId);
 
       case "ITEM_DESCRIPTION_ON_ORDER":
         return mk(kind, weight, !!order && Array.isArray(order.items) && (order.items as unknown[]).length > 0,
@@ -155,7 +188,8 @@ export async function assessDispute(disputeId: string) {
     ? await db.order.count({ where: { payerId: order.payerId, createdAt: { lt: order.createdAt } } })
     : 0;
 
-  const evidence = buildEvidence(dispute, order, shipments, priorOrders);
+  const ledger = await payerLedger(order, dispute);
+  const evidence = buildEvidence(dispute, order, shipments, priorOrders, ledger);
   const strength = evidenceStrength(evidence);
   const timeline = buildTimeline(order, shipments, dispute);
   const calibrated = await calibratedWinRate(dispute.reasonCode);
@@ -204,6 +238,42 @@ export async function assessDispute(disputeId: string) {
   });
 
   return { assessment, ev };
+}
+
+/**
+ * Reads PayPal's transaction record for this payer.
+ *
+ * Transaction Search is a per-app feature that is off by default, so an
+ * unavailable ledger is a normal state: the evidence items that depend on it
+ * are reported as missing, which lowers the evidence strength honestly rather
+ * than failing the assessment or quietly pretending the checks passed.
+ */
+async function payerLedger(order: Order | null, dispute: Dispute): Promise<PayerLedger> {
+  const empty = { available: false, priorSettled: 0, priorRefunded: 0, matchingAmountCount: 0 };
+  if (!order) return { ...empty, reason: "dispute is not matched to an order" };
+
+  const since = new Date(order.createdAt.getTime() - 180 * 86_400_000);
+  const res: PayerHistoryResult = await payerTransactionHistory(order.payerEmail, since, order.createdAt);
+
+  if (!res.available) return { ...empty, reason: res.reason };
+
+  const claim = Number(dispute.amount);
+  let priorSettled = 0;
+  let priorRefunded = 0;
+  let matchingAmountCount = 0;
+
+  for (const t of res.transactions) {
+    const info = t.transaction_info;
+    const value = Math.abs(Number(info?.transaction_amount?.value ?? 0));
+    const isRefund = value !== 0 && Number(info?.transaction_amount?.value ?? 0) < 0;
+
+    if (isRefund) priorRefunded++;
+    else if (info?.transaction_status === "S") priorSettled++;
+
+    if (Math.abs(value - claim) < 0.01) matchingAmountCount++;
+  }
+
+  return { available: true, priorSettled, priorRefunded, matchingAmountCount };
 }
 
 /**

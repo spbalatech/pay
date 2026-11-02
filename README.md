@@ -28,7 +28,7 @@ Aegis is merchant-side and lifecycle-wide. It watches what happens *after* the p
 |---|---|---|
 | **Sentinel** | new orders, pre-fulfillment | Scores dispute risk from payer history, amount outliers, address geometry and velocity. Recommends ship / verify / hold, citing the signals that fired. Enforces merchant-approved prevention rules. |
 | **Interceptor** | the post-payment lifecycle | Detects dispute *precursors* — stalled tracking, missed promise dates, dormant subscription renewals, duplicate charges, silent high-value deliveries — and intervenes inside the window where the buyer is still talking to the merchant rather than their bank. |
-| **Advocate** | filed disputes | Reconstructs the order's timeline from PayPal's own records, checks the evidence that matters for that reason code, computes whether fighting is worth it **in dollars**, and drafts an evidence-cited rebuttal. Accepting is a valid answer and often the correct one. |
+| **Advocate** | filed disputes | Reconstructs the order's timeline from PayPal's own records — order, shipment trackers, and the payer's settled payment history from transaction search — checks the evidence that matters for that reason code, computes whether fighting is worth it **in dollars**, and drafts an evidence-cited rebuttal. Accepting is a valid answer and often the correct one. |
 | **Learner** | resolved outcomes | Finds the shapes that keep costing this merchant money and proposes a prevention rule in plain English for a human to approve. Approved rules are enforced by Sentinel. Also recalibrates the win-rate priors from observed results. |
 
 ### Why the scores are not written by a language model

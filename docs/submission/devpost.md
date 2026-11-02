@@ -65,9 +65,10 @@ called their bank. Intervening inside that window is the cheapest dispute preven
 available. The agent drafts the message; small refunds under a merchant-set ceiling
 it issues itself; anything larger waits for a human.
 
-**Advocate** reconstructs each filed dispute's timeline from PayPal's own records,
-checks the evidence that actually matters for that reason code, and answers the real
-question — not "can I win?" but "is winning worth what it costs?":
+**Advocate** reconstructs each filed dispute's timeline from PayPal's own records —
+the order, its shipment trackers, and the payer's settled payment history from
+transaction search — checks the evidence that actually matters for that reason code,
+and answers the real question — not "can I win?" but "is winning worth what it costs?":
 
 ```
 EV(fight)  = P(win) x 0 + (1 - P(win)) x -(claim + dispute fee) - staff cost
@@ -135,6 +136,14 @@ fetchable by id, but the capture id is local) and `SIMULATED`. The console badge
 them and the seeder prints the split on every run. Every *action* an agent takes runs
 against the live sandbox; a refund against a simulated order records as skipped
 rather than being faked.
+
+**Optional evidence sources degrade, they do not fail.** Transaction Search is a
+per-app feature that is off by default, and two evidence checks depend on it: whether
+this payer has settled payments at PayPal that were never disputed (the strongest
+answer to "I did not authorise this"), and whether more than one transaction matches
+the disputed amount (which either refutes a duplicate claim or confirms it). When the
+feature is off those items report as unavailable, which lowers the evidence strength
+honestly rather than failing the assessment or quietly passing the check.
 
 **Running the integration found real bugs.** `POST /v2/invoicing/invoices` returns a
 link object, not the invoice, so reading `.id` off it yielded `undefined` and every
