@@ -28,6 +28,11 @@ const schema = z.object({
   // supported operations through PayPal's official MCP server (@paypal/mcp),
   // launched over stdio. Both hit the same PayPal APIs.
   AEGIS_PAYPAL_TRANSPORT: z.enum(["rest", "mcp"]).default("rest"),
+
+  // Which MCP server to use when the transport is "mcp": PayPal's hosted one
+  // over SSE, or @paypal/mcp launched locally over stdio. Same tools either way.
+  AEGIS_PAYPAL_MCP_MODE: z.enum(["remote", "local"]).default("local"),
+  AEGIS_PAYPAL_MCP_SSE_URL: z.string().default("https://mcp.sandbox.paypal.com/sse"),
   // Which model provider to use. "auto" prefers Anthropic when a key is set
   // and falls back to a local Ollama server when one is running.
   AEGIS_AI_PROVIDER: z.enum(["auto", "anthropic", "ollama", "none"]).default("auto"),

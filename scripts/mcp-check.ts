@@ -8,7 +8,7 @@
  */
 import "dotenv/config";
 import { hasPayPal, env } from "../src/lib/env";
-import { listMcpTools, callTool, disconnectMcp } from "../src/lib/paypal/mcp";
+import { listMcpTools, callTool, disconnectMcp, mcpMode } from "../src/lib/paypal/mcp";
 import { listDisputes } from "../src/lib/paypal/transport";
 
 async function main() {
@@ -17,16 +17,22 @@ async function main() {
     process.exit(1);
   }
 
-  console.log(`\nPayPal MCP server · ${env().PAYPAL_ENVIRONMENT} · transport=${env().AEGIS_PAYPAL_TRANSPORT}\n`);
+  const where =
+    mcpMode() === "remote"
+      ? `hosted · ${env().AEGIS_PAYPAL_MCP_SSE_URL}`
+      : "local · npx @paypal/mcp over stdio";
+  console.log(`\nPayPal MCP server · ${env().PAYPAL_ENVIRONMENT} · ${where}\n`);
 
   const tools = await listMcpTools();
-  console.log(`  connected over stdio — ${tools.length} tools exposed`);
+  console.log(
+    `  connected over ${mcpMode() === "remote" ? "SSE" : "stdio"} — ${tools.length} tools exposed`,
+  );
   const names = tools.map((t) => t.name);
   const used = ["list_disputes", "get_dispute", "accept_dispute_claim", "create_refund", "create_invoice", "list_transactions"];
   console.log(`  tools Aegis maps: ${used.filter((u) => names.includes(u)).join(", ")}\n`);
 
   // A real call, through the MCP server, against the sandbox.
-  await step("list_disputes via MCP", async () => {
+  await step("read: list_disputes", async () => {
     const r = await listDisputes({ pageSize: 5 }, "mcp");
     return `${r.items?.length ?? 0} dispute(s), via ${r.via}`;
   });
@@ -34,7 +40,7 @@ async function main() {
   // Note the shape: PayPal's MCP tools are NOT the REST bodies. create_invoice
   // flattens detail.currency_code up to the top level, so a REST payload fails
   // validation here. The schemas come from tools/list, not from the REST docs.
-  await step("create_invoice via MCP", async () => {
+  await step("write: create_invoice", async () => {
     const { data, text, isError } = await callTool<{ id?: string; status?: string }>("create_invoice", {
       currency_code: "USD",
       note: "Created through PayPal's MCP server by Aegis.",
@@ -48,7 +54,7 @@ async function main() {
   });
 
   // Same operation both ways, to show the transport is interchangeable.
-  await step("same call over REST", async () => {
+  await step("same read over REST", async () => {
     const r = await listDisputes({ pageSize: 5 }, "rest");
     return `${r.items?.length ?? 0} dispute(s), via ${r.via}`;
   });

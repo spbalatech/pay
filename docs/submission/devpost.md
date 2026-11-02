@@ -228,14 +228,26 @@ caches, rather than minting a second one. `npm run mcp:check` connects, lists th
 tools, and makes real sandbox calls — `list_disputes` and `create_invoice` both
 return live results, and the same invoice is created either way.
 
-Two things we learned doing it, both worth knowing if you try this:
+Both servers are supported, chosen by `AEGIS_PAYPAL_MCP_MODE`: PayPal's hosted
+service at `mcp.sandbox.paypal.com` over SSE, or `@paypal/mcp` launched locally over
+stdio. Three things we found doing it:
 
 - **The MCP tool schemas are not the REST bodies.** `create_invoice` flattens
   `detail.currency_code` to the top level, so posting a REST payload fails validation.
   Take the schemas from `tools/list`, not from the REST reference.
-- **The hosted endpoint was unreachable for us.** `mcp.sandbox.paypal.com` returned
-  404 on `/mcp`, `/http` and `/sse` throughout the build, so the local stdio server is
-  what we integrated against. Same official package, same tools.
+- **On the hosted server, only `/sse` is live, and it is opened with GET.** The
+  documented Streamable HTTP path `/http` returns 404 on both sandbox and production.
+  `/sse` returns 401 with a `WWW-Authenticate` header advertising OAuth, and accepts
+  the same bearer token the REST client already holds.
+- **Hosted reads work; hosted writes currently fail.** The hosted server exposes 46
+  tools against the local server's 28, and `list_disputes` returns live results — but
+  `create_invoice` answers `{"ok":false,"code":"PAYPAL_API_SETUP_ERROR","message":"Unsupported cache mode: default"}`.
+  That is the same error `/paypal:doctor`'s own live probe hits, so it looks like a
+  server-side bug rather than a credential problem; the identical call against the
+  local server succeeds. Worth noting that it answers with HTTP 200 and an `ok:false`
+  body rather than an MCP error, so a client trusting `isError` alone would record a
+  failed write as a success — ours checks the payload. We default to the local server
+  because it works end to end, and have reported the hosted behaviour to PayPal.
 
 REST remains the default because it reaches further: transaction search, webhook
 registration and signature verification, and shipment tracker updates have no MCP

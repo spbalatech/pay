@@ -83,12 +83,25 @@ All calls go through one client with token caching, idempotency keys on writes, 
 ### Two transports
 
 Aegis reaches PayPal through its own REST client **or** through PayPal's official MCP
-server (`@paypal/mcp`), selected by `AEGIS_PAYPAL_TRANSPORT=rest|mcp`. The MCP server
-is launched over stdio and handed the token the REST client already caches.
+server, selected by `AEGIS_PAYPAL_TRANSPORT=rest|mcp`. Either MCP server works, chosen
+by `AEGIS_PAYPAL_MCP_MODE`:
+
+| Mode | Server | Status |
+|---|---|---|
+| `local` (default) | `npx @paypal/mcp` over stdio | 28 tools, reads and writes both work |
+| `remote` | `mcp.sandbox.paypal.com/sse` | 46 tools, reads work, **writes currently fail server-side** |
+
+Both are handed the bearer token the REST client already caches.
 
 ```bash
-npm run mcp:check    # connect, list the 28 tools, make real sandbox calls
+npm run mcp:check                            # local
+AEGIS_PAYPAL_MCP_MODE=remote npm run mcp:check   # hosted
 ```
+
+On the hosted server only `/sse` is live — the documented `/http` path 404s — and the
+stream is opened with `GET`, not `POST`. Writes there return HTTP 200 with an
+`{"ok":false,"code":"PAYPAL_API_SETUP_ERROR"}` body rather than an MCP error, so
+`callTool` inspects the payload instead of trusting `isError` alone.
 
 Five operations route either way — `list_disputes`, `get_dispute`, `create_refund`,
 `create_invoice`, `list_transactions` ([`src/lib/paypal/transport.ts`](src/lib/paypal/transport.ts)).
