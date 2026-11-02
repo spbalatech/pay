@@ -43,7 +43,16 @@ const schema = z.object({
   // LOCAL TESTING ONLY. PayPal's simulate-event endpoint emits events that can
   // never pass real signature verification, so exercising the handler against
   // it requires explicitly accepting unverified deliveries.
-  AEGIS_WEBHOOK_ALLOW_UNVERIFIED: z.coerce.boolean().default(false),
+  //
+  // NOT z.coerce.boolean(). That is Boolean(value), so every non-empty string
+  // is true - including the string "false". A flag that disables signature
+  // verification on an endpoint which creates disputes must never be able to
+  // fail open, so only the literal strings are accepted and anything else
+  // stops the process at boot.
+  AEGIS_WEBHOOK_ALLOW_UNVERIFIED: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((v) => v === "true"),
   // Off by default: PayPal's guidance is never to accept a claim without
   // review. A merchant can opt in by setting a ceiling above zero.
   AEGIS_AUTO_ACCEPT_CEILING_USD: z.coerce.number().default(0),

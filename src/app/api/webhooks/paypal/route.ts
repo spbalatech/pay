@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { db, audit } from "@/lib/db";
 import { env } from "@/lib/env";
 import { readSignatureHeaders, verifyWebhookSignature } from "@/lib/paypal/webhooks";
@@ -49,30 +50,47 @@ export async function POST(req: Request) {
 
   const verified = await verifyWebhookSignature(rawBody, headers);
 
-  const stored = await db.webhookEvent.create({
-    data: {
-      paypalEventId: event.id,
+  // Reject BEFORE touching the dedupe table.
+  //
+  // Event ids leak - through logs, retries and third-party tooling. If an
+  // unverified POST carrying a real event id were recorded here, the genuine
+  // delivery that followed would hit the gate above, get a 200 "duplicate",
+  // and PayPal would mark it delivered and stop retrying. A forged request
+  // would silently suppress a real dispute. So nothing is persisted until the
+  // signature has been accepted.
+  if (!verified && !env().AEGIS_WEBHOOK_ALLOW_UNVERIFIED) {
+    await audit("WEBHOOK", "REJECTED_UNVERIFIED", "PayPalEvent", event.id, {
       eventType: event.event_type,
-      resourceType: event.resource_type ?? null,
-      summary: event.summary ?? null,
-      payload: JSON.parse(rawBody),
-      verified,
-    },
-  });
+    });
+    return NextResponse.json({ error: "signature verification failed" }, { status: 401 });
+  }
 
   if (!verified) {
-    // Stored for inspection, never acted on. PayPal's simulate-event endpoint
-    // emits events that can never pass real verification, so local testing
-    // against it requires an explicit opt-in.
-    if (!env().AEGIS_WEBHOOK_ALLOW_UNVERIFIED) {
-      await audit("WEBHOOK", "REJECTED_UNVERIFIED", "WebhookEvent", stored.id, {
-        eventType: event.event_type,
-      });
-      return NextResponse.json({ error: "signature verification failed" }, { status: 401 });
-    }
     console.warn(
       `[webhook] accepting UNVERIFIED ${event.event_type} because AEGIS_WEBHOOK_ALLOW_UNVERIFIED is set. Never do this in production.`,
     );
+  }
+
+  // Two concurrent deliveries of the same event can both clear the gate above,
+  // so the unique constraint is the real arbiter: whoever loses the race
+  // reports a duplicate rather than a 500 that makes PayPal retry.
+  let stored;
+  try {
+    stored = await db.webhookEvent.create({
+      data: {
+        paypalEventId: event.id,
+        eventType: event.event_type,
+        resourceType: event.resource_type ?? null,
+        summary: event.summary ?? null,
+        payload: JSON.parse(rawBody),
+        verified,
+      },
+    });
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+      return NextResponse.json({ status: "duplicate", eventId: event.id }, { status: 200 });
+    }
+    throw err;
   }
 
   // Answer now, work after. Deliberately not awaited: processing a dispute

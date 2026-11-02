@@ -52,13 +52,34 @@ export class PayPalCredentialsMissing extends Error {
 }
 
 export class PayPalError extends Error {
+  /** PayPal's own correlation id. The first thing their support asks for. */
+  readonly debugId?: string;
+  /** The machine-readable issue code, e.g. PAYEE_NOT_ENABLED_FOR_CARD_PROCESSING. */
+  readonly issue?: string;
+
   constructor(
     message: string,
     readonly status: number,
     readonly body: string,
   ) {
-    super(message);
+    const { debugId, issue } = parseErrorBody(body);
+    super([message, issue && `issue=${issue}`, debugId && `debug_id=${debugId}`].filter(Boolean).join(" "));
     this.name = "PayPalError";
+    this.debugId = debugId;
+    this.issue = issue;
+  }
+}
+
+function parseErrorBody(body: string): { debugId?: string; issue?: string } {
+  try {
+    const json = JSON.parse(body) as {
+      debug_id?: string;
+      name?: string;
+      details?: Array<{ issue?: string }>;
+    };
+    return { debugId: json.debug_id, issue: json.details?.[0]?.issue ?? json.name };
+  } catch {
+    return {};
   }
 }
 

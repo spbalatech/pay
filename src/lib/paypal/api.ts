@@ -161,9 +161,15 @@ export function listDisputes(params: { pageSize?: number; startTime?: string; st
 
 export const getDispute = (id: string) => paypal<PayPalDispute>(`/v1/customer/disputes/${id}`);
 
+/**
+ * Accepting a claim refunds the buyer and closes the case - it cannot be
+ * undone. The client retries 5xx, so this needs an idempotency key or a
+ * transient 500 re-sends the refund.
+ */
 export function acceptDisputeClaim(id: string, note: string, refundAmount?: { value: string; currency: string }) {
   return paypal<{ links?: unknown[] }>(`/v1/customer/disputes/${id}/accept-claim`, {
     method: "POST",
+    idempotencyKey: randomUUID(),
     body: {
       note,
       accept_claim_type: "REFUND",
@@ -358,6 +364,7 @@ export const getInvoice = (id: string) => paypal<PayPalInvoice>(`/v2/invoicing/i
 export const sendInvoice = (id: string) =>
   paypal<{ href?: string }>(`/v2/invoicing/invoices/${id}/send`, {
     method: "POST",
+    idempotencyKey: randomUUID(),
     body: { send_to_recipient: true },
   });
 
