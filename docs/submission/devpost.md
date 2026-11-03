@@ -280,7 +280,7 @@ process rather than failing open.
 
 ## Try it
 
-- **Repo:** `<github url>` — MIT licensed, license file visible in About
+- **Repo:** https://github.com/spbalatech/pay — MIT licensed, license file visible in About
 - **Setup:** `npm install && docker compose up -d && npx prisma migrate deploy && npm run seed && npm run agents:run && npm run dev`
 - **No credentials needed to evaluate:** `npm run seed -- --offline` builds the full
   90-day history without calling PayPal, and three of the four agents still run to
