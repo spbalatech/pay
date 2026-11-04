@@ -5,6 +5,7 @@ import { RunLoopButton } from "@/components/RunLoopButton";
 import { db } from "@/lib/db";
 import { capabilities } from "@/lib/env";
 import { aiStatus } from "@/lib/ai";
+import { recentActivity, type ActivityItem } from "@/lib/activity";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +14,7 @@ export default async function Overview() {
   const ai = await aiStatus();
   let m: Awaited<ReturnType<typeof dashboardMetrics>> | null = null;
   let simulatedShare: { total: number; simulated: number } | null = null;
+  let activity: ActivityItem[] = [];
 
   try {
     m = await dashboardMetrics();
@@ -21,6 +23,7 @@ export default async function Overview() {
       db.order.count({ where: { source: "SIMULATED" } }),
     ]);
     simulatedShare = { total, simulated };
+    activity = await recentActivity(6);
   } catch (err) {
     return (
       <>
@@ -39,130 +42,156 @@ npm run agents:run`}</pre>
     );
   }
 
+  const demo = simulatedShare !== null && simulatedShare.simulated > 0;
+
   return (
     <>
-      <div className="page-head">
-        <h1 className="page-title">Overview</h1>
-        <p className="page-sub">
-          Aegis prevents disputes before they are filed, defends the ones that land, and turns every
-          outcome into a prevention rule. Prevention and defense are counted side by side, because a
-          dispute that never happened is the cheapest one.
-        </p>
+      <div className="page-head page-head-row">
+        <div>
+          <h1 className="page-title">
+            Overview
+            {demo ? (
+              <span className="chip" title="Orders and disputes are demo data; agent actions are real. See About this demo below.">
+                Demo data
+              </span>
+            ) : null}
+          </h1>
+          <p className="page-sub">
+            Aegis stops chargebacks before they are filed, fights the ones worth fighting, and turns
+            every outcome into a rule so the same loss does not happen twice.
+          </p>
+        </div>
+        <RunLoopButton />
       </div>
 
       <Hero
-        label="Total value protected"
+        label="Money protected from chargebacks"
         value={money(m.totalValueProtected)}
-        note={`${m.disputesDeflected} dispute${m.disputesDeflected === 1 ? "" : "s"} deflected before filing · ${m.disputesContested} contested`}
+        note={`${m.disputesDeflected} dispute${m.disputesDeflected === 1 ? "" : "s"} stopped before filing · ${m.disputesContested} fought`}
       />
-      {/* One collapsed line instead of two paragraphs, so the headline number
-          stays above the fold. The full explanation is one click away. */}
+
+      <div className="split">
+        <div>
+          <div className="card">
+            <h3 className="card-title">Where the protection came from</h3>
+            <SegmentedBar
+              parts={[
+                { name: "Stopped before filing", value: m.valueDeflected, color: "var(--prevent)" },
+                { name: "Won back by fighting", value: m.valueRetainedByDefence, color: "var(--defend)" },
+              ]}
+            />
+          </div>
+
+          <div className="tiles tiles-2">
+            <Tile label="Orders checked" value={m.orders} note={`${m.ordersHeld} held before shipping`} />
+            <Tile
+              label="Disputes prevented"
+              value={pct(m.deflectionRate)}
+              note={`of ${m.watchesOpened} early warnings · ${m.escalatedToDispute} became disputes`}
+            />
+            <Tile
+              label="Disputes won"
+              value={pct(m.winRate)}
+              note={`${m.disputesContested} fought · ${m.disputesAccepted} accepted as cheaper`}
+            />
+            <Tile label="Open disputes" value={m.openDisputes} note={`${m.disputes} filed in total`} />
+          </div>
+        </div>
+
+        <div className="card feed-card">
+          <h3 className="card-title">What Aegis just did</h3>
+          {activity.length === 0 ? (
+            <p className="detail-p muted">Nothing yet. Press “Run the agents” to start.</p>
+          ) : (
+            <ul className="feed">
+              {activity.map((a) => (
+                <li key={a.id}>
+                  <Link href={a.href} className="feed-item">
+                    <span className={`feed-agent feed-${a.phase}`}>{a.agent}</span>
+                    <span className="feed-text">{a.text}</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+          <Link href="/audit" className="feed-more">
+            Full audit log →
+          </Link>
+        </div>
+      </div>
+
+      <div className="card">
+        <h3 className="card-title">How the loop works</h3>
+        <div className="loop">
+          <Link href="/orders" className="loop-step">
+            <div className="loop-name">Sentinel</div>
+            <div className="loop-phase">prevent · before shipping</div>
+            <div className="loop-stat">{m.ordersHeld}</div>
+            <div className="loop-desc">risky orders held before they ship</div>
+          </Link>
+          <span className="loop-arrow" aria-hidden>→</span>
+          <Link href="/watchlist" className="loop-step">
+            <div className="loop-name">Interceptor</div>
+            <div className="loop-phase">prevent · after payment</div>
+            <div className="loop-stat">{m.watchesOpened}</div>
+            <div className="loop-desc">early warnings caught while the buyer still talks to you</div>
+          </Link>
+          <span className="loop-arrow" aria-hidden>→</span>
+          <Link href="/disputes" className="loop-step">
+            <div className="loop-name">Advocate</div>
+            <div className="loop-phase">defend</div>
+            <div className="loop-stat">{m.disputes}</div>
+            <div className="loop-desc">disputes judged on what fighting would cost</div>
+          </Link>
+          <span className="loop-arrow" aria-hidden>→</span>
+          <Link href="/rulebook" className="loop-step">
+            <div className="loop-name">Learner</div>
+            <div className="loop-phase">learn</div>
+            <div className="loop-stat">{m.activeRules}</div>
+            <div className="loop-desc">
+              prevention rules in force{m.proposedRules > 0 ? ` · ${m.proposedRules} awaiting your approval` : ""}
+            </div>
+          </Link>
+        </div>
+      </div>
+
       <details className="notice notice-fold">
         <summary>
           <span aria-hidden>{caps.paypal && ai.available ? "✓" : "ℹ"}</span>
           <span>
+            <strong>About this demo</strong> ·{" "}
             {[
-              caps.paypal ? "PayPal sandbox connected" : "No PayPal credentials",
-              ai.available ? `model: ${ai.provider}` : "no model provider",
-              simulatedShare && simulatedShare.simulated > 0
-                ? `${simulatedShare.simulated} of ${simulatedShare.total} orders are fixtures`
-                : null,
-            ]
-              .filter(Boolean)
-              .join(" · ")}
+              caps.paypal ? "PayPal sandbox connected" : "PayPal sandbox keys not set",
+              ai.available ? `AI model: ${ai.provider}` : "AI model not connected",
+            ].join(" · ")}
           </span>
           <span className="notice-more">Details</span>
         </summary>
         <div className="notice-body">
-          {!caps.paypal ? (
+          {demo ? (
             <p>
-              No PayPal sandbox credentials, so live writes are off — everything else runs on
-              seeded data.
+              {simulatedShare!.simulated} of {simulatedShare!.total} orders and all disputes are{" "}
+              <strong>demo data</strong> — the PayPal sandbox cannot create inbound disputes or capture
+              a payment without a browser. Every agent <em>action</em> runs against the real sandbox
+              API. Demo rows are badged throughout.
             </p>
+          ) : null}
+          {!caps.paypal ? (
+            <p>Without PayPal sandbox keys, live writes are off — everything else runs on demo data.</p>
           ) : null}
           {ai.available ? (
             <p>
-              Model provider: <strong>{ai.provider}</strong> ({ai.reasoning}).
+              AI model: <strong>{ai.provider}</strong> ({ai.reasoning}).
             </p>
           ) : (
             <p>
-              No model provider: {ai.hint} Sentinel, Interceptor and Advocate run regardless —
-              their scores are arithmetic. Only the Learner needs one.
+              No AI model connected: {ai.hint} Scores and dollar verdicts never use AI — they are
+              plain arithmetic, so they work regardless. AI writes the response letters and proposes
+              new rules.
             </p>
           )}
-          {simulatedShare && simulatedShare.simulated > 0 ? (
-            <p>
-              {simulatedShare.simulated} of {simulatedShare.total} orders and all disputes are{" "}
-              <strong>fixtures</strong> — the PayPal sandbox cannot originate inbound disputes or
-              capture a payment without a browser. Every agent <em>action</em> runs against the live
-              sandbox API. Simulated rows are badged throughout.
-            </p>
-          ) : null}
         </div>
       </details>
-
-      <div className="card">
-        <h3 className="card-title">Where the protection came from</h3>
-        <SegmentedBar
-          parts={[
-            { name: "Deflected before filing", value: m.valueDeflected, color: "var(--prevent)" },
-            { name: "Retained by defense", value: m.valueRetainedByDefence, color: "var(--defend)" },
-          ]}
-        />
-      </div>
-
-      <div className="tiles">
-        <Tile label="Orders assessed" value={m.orders} note={`${m.ordersHeld} held pre-fulfillment`} />
-        <Tile
-          label="Deflection rate"
-          value={pct(m.deflectionRate)}
-          note={`${m.watchesOpened} watches opened, ${m.escalatedToDispute} escalated`}
-        />
-        <Tile
-          label="Dispute win rate"
-          value={pct(m.winRate)}
-          note={`${m.disputesContested} contested, ${m.disputesAccepted} accepted on EV`}
-        />
-        <Tile label="Open disputes" value={m.openDisputes} note={`${m.disputes} filed in total`} />
-        <Tile
-          label="Prevention rules"
-          value={m.activeRules}
-          note={m.proposedRules > 0 ? `${m.proposedRules} awaiting approval` : "none pending"}
-        />
-      </div>
-
-      <div className="card">
-        <h3 className="card-title">The loop</h3>
-        <div className="loop">
-          <Link href="/orders" className="loop-step">
-            <div className="loop-name">SENTINEL</div>
-            <div className="loop-phase">prevent · pre-fulfillment</div>
-            <div className="loop-stat">{m.ordersHeld}</div>
-            <div className="loop-desc">orders held before shipping</div>
-          </Link>
-          <Link href="/watchlist" className="loop-step">
-            <div className="loop-name">INTERCEPTOR</div>
-            <div className="loop-phase">prevent · pre-dispute</div>
-            <div className="loop-stat">{m.watchesOpened}</div>
-            <div className="loop-desc">precursors caught in the deflection window</div>
-          </Link>
-          <Link href="/disputes" className="loop-step">
-            <div className="loop-name">ADVOCATE</div>
-            <div className="loop-phase">defend</div>
-            <div className="loop-stat">{m.disputes}</div>
-            <div className="loop-desc">disputes triaged on expected value</div>
-          </Link>
-          <Link href="/rulebook" className="loop-step">
-            <div className="loop-name">LEARNER</div>
-            <div className="loop-phase">learn</div>
-            <div className="loop-stat">{m.activeRules + m.proposedRules}</div>
-            <div className="loop-desc">rules written from real outcomes</div>
-          </Link>
-        </div>
-        <div style={{ marginTop: 14 }}>
-          <RunLoopButton />
-        </div>
-      </div>
     </>
   );
 }

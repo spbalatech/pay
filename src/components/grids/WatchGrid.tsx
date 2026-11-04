@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useCallback, useMemo, useState, useTransition } from "react";
 import type { ColDef } from "ag-grid-community";
-import { GridShell, useRevealOnSelect, moneyFmt, dateFmt, humanCode } from "./GridShell";
+import { Drawer } from "../Drawer";
+import { GridShell, moneyFmt, dateFmt, humanCode } from "./GridShell";
 import { SourceBadge, ScoreCell } from "./cells";
 import { approveInterventionAction, dismissWatchAction } from "@/app/actions";
 
@@ -39,7 +40,7 @@ const KIND_LABEL: Record<string, string> = {
 
 export function WatchGrid({ rows }: { rows: WatchRow[] }) {
   const [selected, setSelected] = useState<WatchRow | null>(null);
-  const detailRef = useRevealOnSelect(selected);
+  const close = useCallback(() => setSelected(null), []);
   const [pending, startTransition] = useTransition();
 
   const columnDefs = useMemo<ColDef<WatchRow>[]>(
@@ -99,10 +100,7 @@ export function WatchGrid({ rows }: { rows: WatchRow[] }) {
       />
 
       {selected ? (
-        <div ref={detailRef} className="card" style={{ marginTop: 14, scrollMarginTop: 16 }}>
-          <h3 className="card-title">
-            {humanCode(selected.precursor)} · {selected.paypalOrderId} · ${selected.amountAtRisk.toFixed(2)} at risk
-          </h3>
+        <Drawer open onClose={close} title={<>{humanCode(selected.precursor)} · {selected.paypalOrderId} · ${selected.amountAtRisk.toFixed(2)} at risk</>}>
 
           <p className="detail-p">{selected.rationale}</p>
 
@@ -165,7 +163,7 @@ export function WatchGrid({ rows }: { rows: WatchRow[] }) {
           ) : (
             <p className="detail-p">No intervention proposed yet.</p>
           )}
-        </div>
+        </Drawer>
       ) : (
         <p className="page-sub" style={{ marginTop: 12 }}>
           Select a row to see why it was flagged and what the agent proposes to do about it.

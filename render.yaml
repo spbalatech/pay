@@ -1,0 +1,47 @@
+# One-click hosted demo on Render (https://render.com/docs/blueprint-spec).
+# Dashboard → New → Blueprint → pick this repository. It creates the database
+# and the web service, applies the schema, and loads the demo data on first
+# boot. No PayPal or AI credentials are needed for the demo; add them under the
+# service's Environment tab later if you want live sandbox writes or AI drafts.
+databases:
+  - name: aegis-db
+    plan: free
+    databaseName: aegis
+    user: aegis
+
+services:
+  - type: web
+    name: aegis
+    runtime: node
+    plan: free
+    buildCommand: npm ci && npx prisma generate && npx next build
+    # Schema first, then seed + one agent pass only when the database is empty,
+    # so a restart never duplicates or wipes the demo.
+    startCommand: npx prisma migrate deploy && npm run demo:boot && npx next start -p $PORT
+    healthCheckPath: /api/webhooks/paypal
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: aegis-db
+          property: connectionString
+      - key: PAYPAL_ENVIRONMENT
+        value: SANDBOX
+      - key: AEGIS_PAYPAL_TRANSPORT
+        value: rest
+      - key: AEGIS_AI_PROVIDER
+        value: auto
+      - key: AEGIS_AUTO_ACCEPT_CEILING_USD
+        value: "0"
+      - key: AEGIS_AUTO_REFUND_CEILING_USD
+        value: "25"
+      - key: AEGIS_HOLD_THRESHOLD
+        value: "70"
+      # Optional. Set in the dashboard, never in this file.
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: PAYPAL_CLIENT_ID
+        sync: false
+      - key: PAYPAL_CLIENT_SECRET
+        sync: false

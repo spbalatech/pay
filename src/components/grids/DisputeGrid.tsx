@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useCallback, useMemo, useState, useTransition } from "react";
 import type { ColDef } from "ag-grid-community";
-import { GridShell, useRevealOnSelect, moneyFmt, dateFmt, pctFmt, humanCode } from "./GridShell";
-import { RecommendationBadge, SourceBadge, DueCell } from "./cells";
+import { GridShell, moneyFmt, dateFmt, pctFmt, humanCode } from "./GridShell";
+import { RecommendationBadge, SourceBadge, DueCell, StatusCell } from "./cells";
+import { Drawer } from "../Drawer";
 import { decideDisputeAction } from "@/app/actions";
 
 export type DisputeRow = {
@@ -31,10 +32,21 @@ export type DisputeRow = {
   timeline: Array<{ at: string; what: string; source: string }>;
 };
 
+const usd = (n: number) => `$${Math.abs(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+// Expected values are stored as signed amounts (a loss is negative). The grid
+// shows them as costs, which is how a merchant reads them.
+const costFmt = (p: { value: unknown }) => (p.value === null || p.value === undefined ? "" : usd(Number(p.value)));
+
+/** Records quote raw API codes (DHL_GLOBAL_MAIL); show them as words. */
+const plain = (text: string) => text.replace(/\b[A-Z]+(?:_[A-Z]+)+\b/g, (c) => humanCode(c).toLowerCase());
+
+const isClosed = (d: DisputeRow) => d.decisionStatus === "EXECUTED" || d.status === "RESOLVED" || d.status === "CLOSED";
+
 export function DisputeGrid({ rows }: { rows: DisputeRow[] }) {
   const [selected, setSelected] = useState<DisputeRow | null>(null);
-  const detailRef = useRevealOnSelect(selected);
   const [pending, startTransition] = useTransition();
+  const close = useCallback(() => setSelected(null), []);
 
   const columnDefs = useMemo<ColDef<DisputeRow>[]>(
     () => [
@@ -48,19 +60,33 @@ export function DisputeGrid({ rows }: { rows: DisputeRow[] }) {
         rowGroup: true,
         hide: true,
       },
+      { headerName: "Status", width: 125, valueGetter: (p) => (!p.data ? null : isClosed(p.data) ? (p.data.outcome ?? "CLOSED") : "OPEN"), cellRenderer: StatusCell },
       { field: "payerEmail", headerName: "Payer", minWidth: 175, flex: 1 },
       { field: "amount", headerName: "Claim", width: 118, type: "numericColumn", valueFormatter: moneyFmt, aggFunc: "sum" },
-      { field: "evidenceStrength", headerName: "Evidence", width: 112, type: "numericColumn", valueFormatter: (p) => (p.value == null ? "" : `${p.value}%`) },
-      { field: "pWin", headerName: "P(win)", width: 100, type: "numericColumn", valueFormatter: pctFmt },
-      { field: "evFight", headerName: "EV fight", width: 115, type: "numericColumn", valueFormatter: moneyFmt },
-      { field: "evAccept", headerName: "EV accept", width: 118, type: "numericColumn", valueFormatter: moneyFmt },
-      { field: "recommendation", headerName: "Agent says", width: 125, cellRenderer: RecommendationBadge },
+      { field: "pWin", headerName: "Win chance", width: 118, type: "numericColumn", valueFormatter: pctFmt },
+      { field: "evFight", headerName: "Cost if fought", width: 135, type: "numericColumn", valueFormatter: costFmt },
+      { field: "evAccept", headerName: "Cost if accepted", width: 145, type: "numericColumn", valueFormatter: costFmt },
+      { field: "recommendation", headerName: "Aegis says", width: 120, cellRenderer: RecommendationBadge },
       { field: "responseDueAt", headerName: "Deadline", width: 120, cellRenderer: DueCell },
       { field: "filedAt", headerName: "Filed", width: 100, valueFormatter: dateFmt },
       { field: "source", headerName: "", width: 100, cellRenderer: SourceBadge, filter: false, sortable: false },
     ],
     [],
   );
+
+  const decide = (decision: "FIGHT" | "ACCEPT") =>
+    selected &&
+    startTransition(async () => {
+      await decideDisputeAction(selected.id, decision);
+      setSelected(null);
+    });
+
+  const s = selected;
+  const closed = s ? isClosed(s) : false;
+  const costFight = s?.evFight != null ? Math.abs(s.evFight) : null;
+  const costAccept = s?.evAccept != null ? Math.abs(s.evAccept) : null;
+  const saving = costFight !== null && costAccept !== null ? Math.abs(costAccept - costFight) : null;
+  const winPct = Math.round((s?.pWin ?? 0) * 100);
 
   return (
     <>
@@ -77,123 +103,125 @@ export function DisputeGrid({ rows }: { rows: DisputeRow[] }) {
           cellClass: (p: { node: { group?: boolean } }) => (p.node.group ? "" : "cell-id"),
         }}
       />
+      <p className="page-sub" style={{ marginTop: 12 }}>
+        Click any dispute to open its case file: what happened, the evidence, the verdict in dollars, and the
+        drafted response.
+      </p>
 
-      {selected ? (
-        <div ref={detailRef} className="card" style={{ marginTop: 14, scrollMarginTop: 16 }}>
-          <h3 className="card-title">
-            {humanCode(selected.reasonCode)} · ${selected.amount.toFixed(2)} · {selected.paypalDisputeId}
-          </h3>
+      <Drawer
+        open={!!s}
+        onClose={close}
+        kicker={s ? `${humanCode(s.reasonCode)} · ${s.paypalDisputeId}` : null}
+        title={s ? `${usd(s.amount)} claim${s.payerEmail ? ` from ${s.payerEmail}` : ""}` : ""}
+        footer={
+          s && !closed ? (
+            <div className="btn-row">
+              <button
+                className={`btn btn-lg ${s.recommendation === "FIGHT" ? "btn-primary" : ""}`}
+                disabled={pending}
+                onClick={() => decide("FIGHT")}
+              >
+                Fight it
+              </button>
+              <button
+                className={`btn btn-lg ${s.recommendation === "ACCEPT" ? "btn-primary" : ""}`}
+                disabled={pending}
+                onClick={() => decide("ACCEPT")}
+              >
+                Accept &amp; refund
+              </button>
+              <span className="tile-note" style={{ alignSelf: "center" }}>
+                Nothing is sent to PayPal until you choose.
+              </span>
+            </div>
+          ) : null
+        }
+      >
+        {s ? (
+          <>
+            {s.buyerNote ? <blockquote className="quote">“{s.buyerNote}”</blockquote> : null}
 
-          {selected.buyerNote ? (
-            <p className="detail-p">
-              <span style={{ color: "var(--ink-muted)" }}>Buyer: </span>“{selected.buyerNote}”
-            </p>
-          ) : null}
-
-          <div className="detail-grid">
-            <div>
-              <h4 className="detail-h">The arithmetic</h4>
-              <dl>
-                <div className="kv">
-                  <dt>Evidence strength</dt>
-                  <dd>{selected.evidenceStrength ?? "—"}%</dd>
+            {closed ? (
+              <div className="verdict verdict-closed">
+                <div className="verdict-label">Closed case</div>
+                <div className="verdict-main">
+                  {s.decision ? `You chose to ${s.decision.toLowerCase()}` : "Decided"} · outcome{" "}
+                  {s.outcome?.toLowerCase() ?? "unknown"}
                 </div>
-                <div className="kv">
-                  <dt>P(win)</dt>
-                  <dd>{selected.pWin === null ? "—" : `${Math.round(selected.pWin * 100)}%`}</dd>
-                </div>
-                <div className="kv">
-                  <dt>EV of fighting</dt>
-                  <dd>{selected.evFight === null ? "—" : `$${selected.evFight.toFixed(2)}`}</dd>
-                </div>
-                <div className="kv">
-                  <dt>EV of accepting</dt>
-                  <dd>{selected.evAccept === null ? "—" : `$${selected.evAccept.toFixed(2)}`}</dd>
-                </div>
-                <div className="kv">
-                  <dt>Recommendation</dt>
-                  <dd>{selected.recommendation?.toLowerCase() ?? "—"}</dd>
-                </div>
-              </dl>
-
-              <div className="btn-row" style={{ marginTop: 12 }}>
-                <button
-                  className="btn btn-primary"
-                  disabled={pending || selected.decisionStatus === "EXECUTED"}
-                  onClick={() =>
-                    startTransition(async () => {
-                      await decideDisputeAction(selected.id, "FIGHT");
-                      setSelected(null);
-                    })
-                  }
-                >
-                  Fight it
-                </button>
-                <button
-                  className="btn"
-                  disabled={pending || selected.decisionStatus === "EXECUTED"}
-                  onClick={() =>
-                    startTransition(async () => {
-                      await decideDisputeAction(selected.id, "ACCEPT");
-                      setSelected(null);
-                    })
-                  }
-                >
-                  Accept & refund
-                </button>
-              </div>
-              {selected.decisionStatus === "EXECUTED" ? (
-                <p className="tile-note" style={{ marginTop: 8 }}>
-                  Already decided: {selected.decision?.toLowerCase()} · outcome {selected.outcome?.toLowerCase()}
+                <p className="verdict-note">
+                  Past cases like this are what the Learner studies to write prevention rules.
                 </p>
-              ) : null}
-            </div>
+              </div>
+            ) : s.recommendation ? (
+              <div className={`verdict ${s.recommendation === "FIGHT" ? "verdict-fight" : "verdict-accept"}`}>
+                <div className="verdict-label">Aegis recommends</div>
+                <div className="verdict-main">
+                  {s.recommendation === "FIGHT" ? "Fight this dispute" : "Accept and refund"}
+                </div>
+                {costFight !== null && costAccept !== null ? (
+                  <p className="verdict-note">
+                    {s.recommendation === "FIGHT"
+                      ? `With a ${winPct}% chance to win, fighting is expected to cost ${usd(costFight)} versus ${usd(costAccept)} for refunding — about ${usd(saving ?? 0)} better.`
+                      : `With only a ${winPct}% chance to win, fighting is expected to cost ${usd(costFight)} once fees and staff time are counted, versus ${usd(costAccept)} to refund — accepting is about ${usd(saving ?? 0)} cheaper.`}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
 
-            <div>
-              <h4 className="detail-h">Evidence checklist</h4>
-              <ul className="checklist">
-                {selected.evidence.map((e) => (
-                  <li key={e.kind}>
-                    <span className={e.found ? "check-yes" : "check-no"} aria-hidden>
-                      {e.found ? "✓" : "○"}
-                    </span>
-                    <span style={{ color: e.found ? "var(--ink-secondary)" : "var(--ink-muted)" }}>
-                      {e.detail}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            <div>
-              <h4 className="detail-h">Reconstructed timeline</h4>
-              <ul className="checklist">
-                {selected.timeline.map((t, i) => (
+            <h3 className="detail-h">What happened</h3>
+            {s.timeline.length ? (
+              <ol className="timeline">
+                {s.timeline.map((t, i) => (
                   <li key={i}>
-                    <span className="check-no" style={{ fontVariantNumeric: "tabular-nums", minWidth: 52, fontSize: 11 }}>
+                    <span className="timeline-date">
                       {new Date(t.at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
                     </span>
-                    <span>{t.what}</span>
+                    <span>{plain(t.what)}</span>
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <p className="detail-p muted">No timeline was recorded for this case.</p>
+            )}
+
+            <h3 className="detail-h">
+              Evidence{s.evidenceStrength != null && !closed ? ` · ${s.evidenceStrength}% strength` : ""}
+            </h3>
+            {s.evidence.length ? (
+              <ul className="checklist">
+                {s.evidence.map((e) => (
+                  <li key={e.kind}>
+                    <span className={e.found ? "check-yes" : "check-missing"} aria-hidden>
+                      {e.found ? "✓" : "✕"}
+                    </span>
+                    <span style={{ color: e.found ? "var(--ink)" : "var(--ink-muted)" }}>
+                      {e.found ? e.detail : `${humanCode(e.kind)} — ${e.detail.replace(/\.$/, "")}.`}
+                      <span className="sr-only">{e.found ? " (found)" : " (missing)"}</span>
+                    </span>
                   </li>
                 ))}
               </ul>
-            </div>
-          </div>
+            ) : (
+              <p className="detail-p muted">No evidence was gathered — this case closed before Aegis assessed it.</p>
+            )}
 
-          {selected.rebuttalDraft ? (
-            <>
-              <h4 className="detail-h" style={{ marginTop: 14 }}>
-                Drafted rebuttal
-              </h4>
-              <pre className="detail-pre">{selected.rebuttalDraft}</pre>
-            </>
-          ) : null}
-        </div>
-      ) : (
-        <p className="page-sub" style={{ marginTop: 12 }}>
-          Select a dispute to see the evidence, the arithmetic, and the drafted rebuttal.
-        </p>
-      )}
+            {!closed ? (
+              <>
+                <h3 className="detail-h">Response letter</h3>
+                {s.rebuttalDraft ? (
+                  <pre className="detail-pre">{s.rebuttalDraft}</pre>
+                ) : (
+                  <p className="detail-p muted">
+                    {s.recommendation === "FIGHT"
+                      ? "Aegis drafts the response letter here, citing only the evidence above, when an AI model is connected."
+                      : "No letter needed — the recommendation is to accept."}
+                  </p>
+                )}
+              </>
+            ) : null}
+          </>
+        ) : null}
+      </Drawer>
     </>
   );
 }

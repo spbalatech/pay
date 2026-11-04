@@ -142,6 +142,16 @@ PayPal must reach the URL from the public internet, so use a tunnel (ngrok, clou
 
 ## Running it
 
+### Hosted demo (no install)
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/spbalatech/pay)
+
+The repository ships a [`render.yaml`](render.yaml) blueprint: one click creates a free Postgres database and the web
+service, applies the schema, and on first boot loads the offline demo data and runs one pass of the agents
+([`scripts/demo-boot.ts`](scripts/demo-boot.ts)). Restarts keep existing data. No credentials are needed; add
+`ANTHROPIC_API_KEY` or PayPal sandbox keys in the service's Environment tab to switch on AI drafts or live writes.
+Free Render services sleep when idle, so the first visit can take up to a minute.
+
 ### Requirements
 - Node 18+
 - Docker (for Postgres), or any Postgres 14+

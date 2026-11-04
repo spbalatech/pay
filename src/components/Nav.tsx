@@ -18,10 +18,16 @@ export function Nav({ counts }: { counts: Record<string, number> }) {
 
   return (
     <nav className="sidebar">
-      <div className="brand">
-        <span className="brand-mark">Aegis</span>
-        <span className="brand-sub">chargeback defense</span>
-      </div>
+      <Link href="/" className="brand" aria-label="Aegis home">
+        <svg className="brand-logo" viewBox="0 0 24 24" width="26" height="26" aria-hidden>
+          <path d="M12 2 3.5 5.5v6c0 5 3.6 9.3 8.5 10.5 4.9-1.2 8.5-5.5 8.5-10.5v-6L12 2Z" fill="var(--prevent)" />
+          <path d="m8 12.2 2.7 2.7L16.3 9.3" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+        <span>
+          <span className="brand-mark">Aegis</span>
+          <span className="brand-sub">chargeback defense</span>
+        </span>
+      </Link>
 
       {LINKS.map((l) => {
         const active = pathname === l.href;
@@ -37,7 +43,10 @@ export function Nav({ counts }: { counts: Record<string, number> }) {
         );
       })}
 
-      <ThemeToggle />
+      <div className="nav-foot">
+        <span className="chip chip-paypal">Built on PayPal sandbox</span>
+        <ThemeToggle />
+      </div>
     </nav>
   );
 }

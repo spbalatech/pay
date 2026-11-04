@@ -8,21 +8,23 @@ export function RunLoopButton() {
   const [result, setResult] = useState<string | null>(null);
 
   return (
-    <div className="btn-row" style={{ alignItems: "center" }}>
+    <div className="run-loop">
       <button
-        className="btn btn-primary"
+        className="btn btn-primary btn-lg"
         disabled={pending}
         onClick={() =>
           startTransition(async () => {
             setResult(null);
             const r = await runLoopAction();
-            setResult(`${r.scored} orders scored · ${r.watches} watches · ${r.decisions} disputes assessed`);
+            setResult(`Done: ${r.scored} new orders checked · ${r.watches} warnings · ${r.decisions} disputes assessed`);
           })
         }
       >
-        {pending ? "Running…" : "Run one pass"}
+        {pending ? "Agents working…" : "▶ Run the agents"}
       </button>
-      {result ? <span className="tile-note">{result}</span> : null}
+      <span className="tile-note" role="status" aria-live="polite">
+        {result ?? "Checks new orders, watches shipments and judges disputes"}
+      </span>
     </div>
   );
 }

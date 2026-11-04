@@ -2,7 +2,8 @@
 
 import { useCallback, useMemo, useState, useTransition } from "react";
 import type { ColDef } from "ag-grid-community";
-import { GridShell, useRevealOnSelect, moneyFmt, dateFmt } from "./GridShell";
+import { Drawer } from "../Drawer";
+import { GridShell, moneyFmt, dateFmt } from "./GridShell";
 import { TierBadge, RecommendationBadge, SourceBadge, ScoreCell } from "./cells";
 import { overrideOrderAction } from "@/app/actions";
 
@@ -26,7 +27,7 @@ export type OrderRow = {
 
 export function OrderGrid({ rows }: { rows: OrderRow[] }) {
   const [selected, setSelected] = useState<OrderRow | null>(null);
-  const detailRef = useRevealOnSelect(selected);
+  const close = useCallback(() => setSelected(null), []);
   const [pending, startTransition] = useTransition();
 
   const columnDefs = useMemo<ColDef<OrderRow>[]>(
@@ -51,6 +52,27 @@ export function OrderGrid({ rows }: { rows: OrderRow[] }) {
         aggFunc: "sum",
       },
       { field: "score", headerName: "Risk", width: 130, cellRenderer: ScoreCell },
+      {
+        // AG Grid sparkline: one bar per signal that fired, red pushes risk up,
+        // green pulls it down. Shows *why* a score is high without opening the row.
+        headerName: "Why",
+        colId: "signalMix",
+        width: 120,
+        filter: false,
+        sortable: false,
+        valueGetter: (p) => (p.data?.signals ?? []).map((s) => s.weight).sort((a, b) => b - a),
+        cellRenderer: "agSparklineCellRenderer",
+        cellRendererParams: {
+          sparklineOptions: {
+            type: "column",
+            paddingInner: 0.3,
+            padding: { top: 6, bottom: 6 },
+            axis: { strokeWidth: 0 },
+            formatter: (params: { yValue: number }) => ({ fill: params.yValue > 0 ? "#d03b3b" : "#0ca30c" }),
+          },
+        },
+        headerTooltip: "Each bar is a risk signal that fired; red raises the score, green lowers it.",
+      },
       { field: "recommendation", headerName: "Action", width: 115, cellRenderer: RecommendationBadge },
       { field: "createdAt", headerName: "Placed", width: 105, valueFormatter: dateFmt },
       { field: "source", headerName: "", width: 100, cellRenderer: SourceBadge, filter: false, sortable: false },
@@ -86,10 +108,7 @@ export function OrderGrid({ rows }: { rows: OrderRow[] }) {
       />
 
       {selected ? (
-        <div ref={detailRef} className="card" style={{ marginTop: 14, scrollMarginTop: 16 }}>
-          <h3 className="card-title">
-            {selected.paypalOrderId} · ${selected.amount.toFixed(2)} · {selected.payerEmail}
-          </h3>
+        <Drawer open onClose={close} title={<>{selected.paypalOrderId} · ${selected.amount.toFixed(2)} · {selected.payerEmail}</>}>
 
           <p className="detail-p">{selected.narrative ?? "No narrative generated."}</p>
 
@@ -166,7 +185,7 @@ export function OrderGrid({ rows }: { rows: OrderRow[] }) {
               </div>
             </div>
           </div>
-        </div>
+        </Drawer>
       ) : (
         <p className="page-sub" style={{ marginTop: 12 }}>
           Select a row to see the signals behind its score.

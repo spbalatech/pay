@@ -112,3 +112,22 @@ export function ScoreCell(p: ICellRendererParams) {
     </span>
   );
 }
+
+/** Dispute lifecycle as a word plus glyph: open cases are the ones to act on. */
+export function StatusCell(p: ICellRendererParams) {
+  if (!p.value) return null;
+  const v = String(p.value);
+  const map: Record<string, { cls: string; glyph: string; label: string }> = {
+    OPEN: { cls: "badge-warning", glyph: "▲", label: "open" },
+    WON: { cls: "badge-good", glyph: "●", label: "won" },
+    LOST: { cls: "badge-critical", glyph: "■", label: "lost" },
+    ACCEPTED: { cls: "badge-muted", glyph: "·", label: "accepted" },
+  };
+  const s = map[v] ?? { cls: "badge-muted", glyph: "·", label: v.toLowerCase() || "closed" };
+  return (
+    <span className={`badge ${s.cls}`}>
+      <span aria-hidden>{s.glyph}</span>
+      {s.label}
+    </span>
+  );
+}

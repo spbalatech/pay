@@ -35,7 +35,11 @@ export default async function DisputesPage() {
     timeline: (d.assessment?.timeline as DisputeRow["timeline"]) ?? [],
   }));
 
-  const open = rows.filter((r) => r.status !== "RESOLVED" && r.status !== "CLOSED");
+  const isOpen = (r: DisputeRow) => r.status !== "RESOLVED" && r.status !== "CLOSED";
+  // Open cases first: they are the ones with a deadline, and the first row a
+  // visitor clicks should be one with a full case file.
+  rows.sort((a, b) => Number(isOpen(b)) - Number(isOpen(a)));
+  const open = rows.filter(isOpen);
 
   return (
     <>
