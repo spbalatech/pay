@@ -2,6 +2,8 @@
 
 import { useState, useTransition } from "react";
 import { runLoopAction } from "@/app/actions";
+import { LoaderCircle, Play } from "lucide-react";
+import { Icon } from "./icons";
 
 export function RunLoopButton() {
   const [pending, startTransition] = useTransition();
@@ -20,7 +22,17 @@ export function RunLoopButton() {
           })
         }
       >
-        {pending ? "Agents working…" : "▶ Run the agents"}
+        {pending ? (
+          <>
+            <Icon as={LoaderCircle} className="spin" />
+            Agents working…
+          </>
+        ) : (
+          <>
+            <Icon as={Play} />
+            Run the agents
+          </>
+        )}
       </button>
       <span className="tile-note" role="status" aria-live="polite">
         {result ?? "Checks new orders, watches shipments and judges disputes"}

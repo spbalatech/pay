@@ -6,6 +6,20 @@ import { Drawer } from "../Drawer";
 import { GridShell, moneyFmt, dateFmt, humanCode } from "./GridShell";
 import { SourceBadge, ScoreCell } from "./cells";
 import { approveInterventionAction, dismissWatchAction } from "@/app/actions";
+import { Check, Mail, Send, TriangleAlert, X } from "lucide-react";
+import type { ICellRendererParams } from "ag-grid-community";
+import { Icon, WARNING_ICON } from "../icons";
+
+/** Warning-sign name with its icon (group rows of the watchlist). */
+function WarningCell(p: ICellRendererParams) {
+  if (!p.value) return null;
+  return (
+    <span className="with-icon">
+      <Icon as={WARNING_ICON[String(p.value)] ?? TriangleAlert} size={15} />
+      {p.valueFormatted ?? humanCode(String(p.value))}
+    </span>
+  );
+}
 
 export type WatchRow = {
   id: string;
@@ -49,7 +63,8 @@ export function WatchGrid({ rows }: { rows: WatchRow[] }) {
         field: "precursor",
         headerName: "Warning sign",
         width: 190,
-        valueFormatter: (p) => humanCode(String(p.value)),
+        valueFormatter: (p) => (p.value ? humanCode(String(p.value)) : ""),
+        cellRenderer: WarningCell,
         rowGroup: true,
         hide: true,
       },
@@ -67,7 +82,7 @@ export function WatchGrid({ rows }: { rows: WatchRow[] }) {
         field: "predictedReasonCode",
         headerName: "Would become",
         width: 180,
-        valueFormatter: (p) => humanCode(String(p.value)),
+        valueFormatter: (p) => (p.value ? humanCode(String(p.value)) : ""),
       },
       {
         colId: "proposed",
@@ -75,7 +90,7 @@ export function WatchGrid({ rows }: { rows: WatchRow[] }) {
         width: 165,
         valueGetter: (p) => (p.data?.intervention ? KIND_LABEL[p.data.intervention.kind] ?? p.data.intervention.kind : "—"),
       },
-      { field: "status", headerName: "Status", width: 125, valueFormatter: (p) => humanCode(String(p.value)) },
+      { field: "status", headerName: "Status", width: 125, valueFormatter: (p) => (p.value ? humanCode(String(p.value)) : "") },
       { field: "openedAt", headerName: "Opened", width: 105, valueFormatter: dateFmt },
       { field: "source", headerName: "", width: 100, cellRenderer: SourceBadge, filter: false, sortable: false },
     ],
@@ -101,7 +116,16 @@ export function WatchGrid({ rows }: { rows: WatchRow[] }) {
       />
 
       {selected ? (
-        <Drawer open onClose={close} title={<>{humanCode(selected.precursor)} · {selected.paypalOrderId} · ${selected.amountAtRisk.toFixed(2)} at risk</>}>
+        <Drawer
+          open
+          onClose={close}
+          title={
+            <>
+              <Icon as={WARNING_ICON[selected.precursor] ?? TriangleAlert} size={18} className="title-icon" />{" "}
+              {humanCode(selected.precursor)} · {selected.paypalOrderId} · ${selected.amountAtRisk.toFixed(2)} at risk
+            </>
+          }
+        >
 
           <p className="detail-p">{selected.rationale}</p>
 
@@ -137,6 +161,7 @@ export function WatchGrid({ rows }: { rows: WatchRow[] }) {
                       })
                     }
                   >
+                    <Icon as={selected.intervention.status === "EXECUTED" ? Check : Send} />
                     {selected.intervention.status === "EXECUTED" ? "Executed" : "Approve & send"}
                   </button>
                   <button
@@ -149,6 +174,7 @@ export function WatchGrid({ rows }: { rows: WatchRow[] }) {
                       })
                     }
                   >
+                    <Icon as={X} />
                     Dismiss
                   </button>
                 </div>
@@ -156,7 +182,7 @@ export function WatchGrid({ rows }: { rows: WatchRow[] }) {
 
               {selected.intervention.message ? (
                 <div>
-                  <h4 className="detail-h">Drafted message</h4>
+                  <h4 className="detail-h h-icon"><Icon as={Mail} size={14} />Drafted message</h4>
                   <pre className="detail-pre">{selected.intervention.message}</pre>
                 </div>
               ) : null}

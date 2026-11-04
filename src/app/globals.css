@@ -411,6 +411,25 @@ a { color: inherit; text-decoration: none; }
 
 .btn-lg { font-size: 13.5px; padding: 9px 16px; }
 
+/* ----------------------------------------------------------------- icons */
+
+.icon { flex: 0 0 auto; }
+.btn { display: inline-flex; align-items: center; gap: 6px; }
+.nav-label { display: flex; align-items: center; gap: 9px; }
+.navlink .icon { color: var(--ink-muted); }
+.navlink[data-active="true"] .icon { color: var(--prevent); }
+.title-icon { color: var(--prevent); }
+.with-icon { display: inline-flex; align-items: center; gap: 6px; }
+.loop-name { display: flex; align-items: center; gap: 6px; }
+.loop-name .icon { color: var(--prevent); }
+.feed-agent { display: inline-flex; align-items: center; gap: 5px; align-self: center; }
+.h-icon { display: flex; align-items: center; gap: 6px; }
+.verdict-label { display: flex; align-items: center; gap: 6px; }
+.check-yes .icon, .check-missing .icon { display: block; }
+.spin { animation: spin 0.9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spin { animation: none; } }
+
 .page-head-row { display: flex; gap: 20px; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; }
 .run-loop { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; max-width: 280px; text-align: right; }
 
@@ -425,7 +444,7 @@ a { color: inherit; text-decoration: none; }
 .feed-item:hover .feed-text { color: var(--ink); }
 .feed-text { color: var(--ink-secondary); }
 .feed-agent {
-  flex: 0 0 82px;
+  flex: 0 0 104px;
   font-size: 11px;
   font-weight: 620;
   text-transform: uppercase;
@@ -523,7 +542,10 @@ a { color: inherit; text-decoration: none; }
   .brand-sub { display: none; }
   .nav-foot { order: 1; margin: 0; flex-direction: row; }
   .nav-foot .chip { display: none; }
-  .navlink { order: 2; padding: 5px 9px; font-size: 13px; }
+  .navlink { order: 2; padding: 5px 7px; font-size: 13px; }
+  /* Icons stay on phones, but tighter, so the menu still fits in two rows. */
+  .nav-label { gap: 5px; }
+  .navlink .icon { width: 14px; height: 14px; }
   .page-head-row { flex-direction: column; }
   .run-loop { align-items: stretch; text-align: left; max-width: none; }
   .loop-arrow { display: none; }
@@ -539,4 +561,9 @@ a { color: inherit; text-decoration: none; }
     align-items: center;
   }
   [class*="ag-theme-quartz"] .ag-cell.ag-cell-wrap-text.cell-id { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+}
+
+@media (max-width: 380px) {
+  /* Smallest phones: menu icons would push the menu to a third row. */
+  .navlink .icon { display: none; }
 }

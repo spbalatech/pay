@@ -3,6 +3,7 @@ import { calibration } from "@/agents/learner";
 import { RuleCard, ProposeButton } from "@/components/RuleCard";
 import { WIN_RATE_PRIORS } from "@/agents/ev";
 import { aiAvailable } from "@/lib/ai";
+import { Icon, NAV_ICON } from "@/components/icons";
 
 export const dynamic = "force-dynamic";
 
@@ -32,7 +33,7 @@ export default async function RulebookPage() {
   return (
     <>
       <div className="page-head">
-        <h1 className="page-title">Rulebook</h1>
+        <h1 className="page-title"><Icon as={NAV_ICON["/rulebook"]} size={22} className="title-icon" />Rulebook</h1>
         <p className="page-sub">
           Learner reads resolved disputes, finds the shapes that keep costing you money, and writes a
           prevention rule for you to approve. It can only compose conditions from a fixed predicate

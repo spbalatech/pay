@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ThemeToggle } from "./ThemeToggle";
+import { Icon, NAV_ICON } from "./icons";
 
 const LINKS = [
   { href: "/", label: "Overview", phase: "" },
@@ -34,9 +35,12 @@ export function Nav({ counts }: { counts: Record<string, number> }) {
         const count = "key" in l ? counts[l.key] : undefined;
         return (
           <Link key={l.href} href={l.href} className="navlink" data-active={active}>
-            <span>
-              {l.label}
-              {l.phase ? <div className="phase">{l.phase}</div> : null}
+            <span className="nav-label">
+              <Icon as={NAV_ICON[l.href]} />
+              <span>
+                {l.label}
+                {l.phase ? <div className="phase">{l.phase}</div> : null}
+              </span>
             </span>
             {count ? <span className="nav-count">{count}</span> : null}
           </Link>

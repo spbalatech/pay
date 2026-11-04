@@ -2,6 +2,8 @@
 
 import { useState, useTransition } from "react";
 import { approveRuleAction, rejectRuleAction, proposeRulesAction } from "@/app/actions";
+import { Ban, Check, CircleCheck, Hourglass, LoaderCircle, Sparkles, X } from "lucide-react";
+import { Icon } from "./icons";
 
 export type SerializedRule = {
   id: string;
@@ -26,7 +28,7 @@ export function RuleCard({ rule }: { rule: SerializedRule }) {
           {rule.plainEnglish}
         </h3>
         <span className={`badge ${rule.status === "ACTIVE" ? "badge-good" : rule.status === "REJECTED" ? "badge-muted" : "badge-warning"}`}>
-          <span aria-hidden>{rule.status === "ACTIVE" ? "●" : rule.status === "REJECTED" ? "·" : "▲"}</span>
+          <Icon as={rule.status === "ACTIVE" ? CircleCheck : rule.status === "REJECTED" ? Ban : Hourglass} size={12} />
           {rule.status.toLowerCase()}
         </span>
       </div>
@@ -67,6 +69,7 @@ export function RuleCard({ rule }: { rule: SerializedRule }) {
                 disabled={pending}
                 onClick={() => startTransition(async () => void (await approveRuleAction(rule.id)))}
               >
+                <Icon as={Check} />
                 Approve & enforce
               </button>
               <button
@@ -74,6 +77,7 @@ export function RuleCard({ rule }: { rule: SerializedRule }) {
                 disabled={pending}
                 onClick={() => startTransition(async () => void (await rejectRuleAction(rule.id)))}
               >
+                <Icon as={X} />
                 Reject
               </button>
             </div>
@@ -124,6 +128,7 @@ export function ProposeButton() {
           })
         }
       >
+        <Icon as={pending ? LoaderCircle : Sparkles} className={pending ? "spin" : undefined} />
         {pending ? "Analysing outcomes…" : "Look for new patterns"}
       </button>
       {msg ? <span className="tile-note">{msg}</span> : null}

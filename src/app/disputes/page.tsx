@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { DisputeGrid, type DisputeRow } from "@/components/grids/DisputeGrid";
+import { Icon, NAV_ICON } from "@/components/icons";
 
 export const dynamic = "force-dynamic";
 
@@ -44,7 +45,7 @@ export default async function DisputesPage() {
   return (
     <>
       <div className="page-head">
-        <h1 className="page-title">Disputes</h1>
+        <h1 className="page-title"><Icon as={NAV_ICON["/disputes"]} size={22} className="title-icon" />Disputes</h1>
         <p className="page-sub">
           Advocate reconstructs each order&rsquo;s timeline from PayPal&rsquo;s own records, checks the
           evidence that matters for that reason code, and decides in dollars whether fighting is

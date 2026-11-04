@@ -6,6 +6,8 @@ import { GridShell, moneyFmt, dateFmt, pctFmt, humanCode } from "./GridShell";
 import { RecommendationBadge, SourceBadge, DueCell, StatusCell } from "./cells";
 import { Drawer } from "../Drawer";
 import { decideDisputeAction } from "@/app/actions";
+import { Archive, CalendarClock, Check, CircleDollarSign, FileText, Mail, X } from "lucide-react";
+import { Icon, BADGE_ICON } from "../icons";
 
 export type DisputeRow = {
   id: string;
@@ -122,6 +124,7 @@ export function DisputeGrid({ rows }: { rows: DisputeRow[] }) {
                 disabled={pending}
                 onClick={() => decide("FIGHT")}
               >
+                <Icon as={BADGE_ICON.FIGHT} />
                 Fight it
               </button>
               <button
@@ -129,6 +132,7 @@ export function DisputeGrid({ rows }: { rows: DisputeRow[] }) {
                 disabled={pending}
                 onClick={() => decide("ACCEPT")}
               >
+                <Icon as={BADGE_ICON.ACCEPT} />
                 Accept &amp; refund
               </button>
               <span className="tile-note" style={{ alignSelf: "center" }}>
@@ -144,7 +148,7 @@ export function DisputeGrid({ rows }: { rows: DisputeRow[] }) {
 
             {closed ? (
               <div className="verdict verdict-closed">
-                <div className="verdict-label">Closed case</div>
+                <div className="verdict-label"><Icon as={Archive} size={14} />Closed case</div>
                 <div className="verdict-main">
                   {s.decision ? `You chose to ${s.decision.toLowerCase()}` : "Decided"} · outcome{" "}
                   {s.outcome?.toLowerCase() ?? "unknown"}
@@ -155,7 +159,7 @@ export function DisputeGrid({ rows }: { rows: DisputeRow[] }) {
               </div>
             ) : s.recommendation ? (
               <div className={`verdict ${s.recommendation === "FIGHT" ? "verdict-fight" : "verdict-accept"}`}>
-                <div className="verdict-label">Aegis recommends</div>
+                <div className="verdict-label"><Icon as={CircleDollarSign} size={14} />Aegis recommends</div>
                 <div className="verdict-main">
                   {s.recommendation === "FIGHT" ? "Fight this dispute" : "Accept and refund"}
                 </div>
@@ -169,7 +173,7 @@ export function DisputeGrid({ rows }: { rows: DisputeRow[] }) {
               </div>
             ) : null}
 
-            <h3 className="detail-h">What happened</h3>
+            <h3 className="detail-h h-icon"><Icon as={CalendarClock} size={14} />What happened</h3>
             {s.timeline.length ? (
               <ol className="timeline">
                 {s.timeline.map((t, i) => (
@@ -185,7 +189,8 @@ export function DisputeGrid({ rows }: { rows: DisputeRow[] }) {
               <p className="detail-p muted">No timeline was recorded for this case.</p>
             )}
 
-            <h3 className="detail-h">
+            <h3 className="detail-h h-icon">
+              <Icon as={FileText} size={14} />
               Evidence{s.evidenceStrength != null && !closed ? ` · ${s.evidenceStrength}% strength` : ""}
             </h3>
             {s.evidence.length ? (
@@ -193,7 +198,7 @@ export function DisputeGrid({ rows }: { rows: DisputeRow[] }) {
                 {s.evidence.map((e) => (
                   <li key={e.kind}>
                     <span className={e.found ? "check-yes" : "check-missing"} aria-hidden>
-                      {e.found ? "✓" : "✕"}
+                      <Icon as={e.found ? Check : X} size={15} />
                     </span>
                     <span style={{ color: e.found ? "var(--ink)" : "var(--ink-muted)" }}>
                       {e.found ? e.detail : `${humanCode(e.kind)} — ${e.detail.replace(/\.$/, "")}.`}
@@ -208,7 +213,7 @@ export function DisputeGrid({ rows }: { rows: DisputeRow[] }) {
 
             {!closed ? (
               <>
-                <h3 className="detail-h">Response letter</h3>
+                <h3 className="detail-h h-icon"><Icon as={Mail} size={14} />Response letter</h3>
                 {s.rebuttalDraft ? (
                   <pre className="detail-pre">{s.rebuttalDraft}</pre>
                 ) : (

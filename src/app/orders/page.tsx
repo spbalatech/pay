@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { OrderGrid, type OrderRow } from "@/components/grids/OrderGrid";
+import { Icon, NAV_ICON } from "@/components/icons";
 
 export const dynamic = "force-dynamic";
 
@@ -38,7 +39,7 @@ export default async function OrdersPage() {
   return (
     <>
       <div className="page-head">
-        <h1 className="page-title">Order risk</h1>
+        <h1 className="page-title"><Icon as={NAV_ICON["/orders"]} size={22} className="title-icon" />Order risk</h1>
         <p className="page-sub">
           Sentinel scores every order before it ships. Scores are computed from weighted signals, not
           written by a language model — select any row to see exactly which signals fired and what

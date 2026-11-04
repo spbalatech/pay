@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { capabilities } from "@/lib/env";
 import { aiStatus } from "@/lib/ai";
 import { recentActivity, type ActivityItem } from "@/lib/activity";
+import { Icon, AGENT_ICON, NAV_ICON } from "@/components/icons";
 
 export const dynamic = "force-dynamic";
 
@@ -49,6 +50,7 @@ npm run agents:run`}</pre>
       <div className="page-head page-head-row">
         <div>
           <h1 className="page-title">
+            <Icon as={NAV_ICON["/"]} size={22} className="title-icon" />
             Overview
             {demo ? (
               <span className="chip" title="Orders and disputes are demo data; agent actions are real. See About this demo below.">
@@ -107,7 +109,10 @@ npm run agents:run`}</pre>
               {activity.map((a) => (
                 <li key={a.id}>
                   <Link href={a.href} className="feed-item">
-                    <span className={`feed-agent feed-${a.phase}`}>{a.agent}</span>
+                    <span className={`feed-agent feed-${a.phase}`}>
+                      <Icon as={AGENT_ICON[a.agent] ?? AGENT_ICON.You} size={14} />
+                      {a.agent}
+                    </span>
                     <span className="feed-text">{a.text}</span>
                   </Link>
                 </li>
@@ -124,28 +129,28 @@ npm run agents:run`}</pre>
         <h3 className="card-title">How the loop works</h3>
         <div className="loop">
           <Link href="/orders" className="loop-step">
-            <div className="loop-name">Sentinel</div>
+            <div className="loop-name"><Icon as={AGENT_ICON.Sentinel} />Sentinel</div>
             <div className="loop-phase">prevent · before shipping</div>
             <div className="loop-stat">{m.ordersHeld}</div>
             <div className="loop-desc">risky orders held before they ship</div>
           </Link>
           <span className="loop-arrow" aria-hidden>→</span>
           <Link href="/watchlist" className="loop-step">
-            <div className="loop-name">Interceptor</div>
+            <div className="loop-name"><Icon as={AGENT_ICON.Interceptor} />Interceptor</div>
             <div className="loop-phase">prevent · after payment</div>
             <div className="loop-stat">{m.watchesOpened}</div>
             <div className="loop-desc">early warnings caught while the buyer still talks to you</div>
           </Link>
           <span className="loop-arrow" aria-hidden>→</span>
           <Link href="/disputes" className="loop-step">
-            <div className="loop-name">Advocate</div>
+            <div className="loop-name"><Icon as={AGENT_ICON.Advocate} />Advocate</div>
             <div className="loop-phase">defend</div>
             <div className="loop-stat">{m.disputes}</div>
             <div className="loop-desc">disputes judged on what fighting would cost</div>
           </Link>
           <span className="loop-arrow" aria-hidden>→</span>
           <Link href="/rulebook" className="loop-step">
-            <div className="loop-name">Learner</div>
+            <div className="loop-name"><Icon as={AGENT_ICON.Learner} />Learner</div>
             <div className="loop-phase">learn</div>
             <div className="loop-stat">{m.activeRules}</div>
             <div className="loop-desc">

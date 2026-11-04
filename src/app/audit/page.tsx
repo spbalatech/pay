@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { AuditGrid, type AuditRow } from "@/components/grids/AuditGrid";
+import { Icon, NAV_ICON } from "@/components/icons";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +20,7 @@ export default async function AuditPage() {
   return (
     <>
       <div className="page-head">
-        <h1 className="page-title">Audit log</h1>
+        <h1 className="page-title"><Icon as={NAV_ICON["/audit"]} size={22} className="title-icon" />Audit log</h1>
         <p className="page-sub">
           Every agent decision and every human override, in order. Grouped by actor so you can see
           what the agents did on their own and what a person signed off. This is the record a

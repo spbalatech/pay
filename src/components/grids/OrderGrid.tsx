@@ -6,6 +6,8 @@ import { Drawer } from "../Drawer";
 import { GridShell, moneyFmt, dateFmt } from "./GridShell";
 import { TierBadge, RecommendationBadge, SourceBadge, ScoreCell } from "./cells";
 import { overrideOrderAction } from "@/app/actions";
+import { Activity, MapPin, Scale } from "lucide-react";
+import { Icon, BADGE_ICON } from "../icons";
 
 export type OrderRow = {
   id: string;
@@ -117,7 +119,7 @@ export function OrderGrid({ rows }: { rows: OrderRow[] }) {
 
           <div className="detail-grid">
             <div>
-              <h4 className="detail-h">Signals that fired</h4>
+              <h4 className="detail-h h-icon"><Icon as={Activity} size={14} />Signals that fired</h4>
               <ul className="checklist">
                 {selected.signals.length === 0 ? (
                   <li style={{ color: "var(--ink-muted)" }}>None — baseline risk only.</li>
@@ -141,7 +143,7 @@ export function OrderGrid({ rows }: { rows: OrderRow[] }) {
             </div>
 
             <div>
-              <h4 className="detail-h">Shipping</h4>
+              <h4 className="detail-h h-icon"><Icon as={MapPin} size={14} />Shipping</h4>
               <dl>
                 <div className="kv">
                   <dt>Address</dt>
@@ -153,7 +155,8 @@ export function OrderGrid({ rows }: { rows: OrderRow[] }) {
                 </div>
               </dl>
 
-              <h4 className="detail-h" style={{ marginTop: 12 }}>
+              <h4 className="detail-h h-icon" style={{ marginTop: 12 }}>
+                <Icon as={Scale} size={14} />
                 If disputed, likely as
               </h4>
               <p className="detail-p" style={{ margin: 0 }}>
@@ -182,11 +185,13 @@ export function OrderGrid({ rows }: { rows: OrderRow[] }) {
               <div className="btn-row" style={{ marginTop: 14 }}>
                 {selected.recommendation !== "SHIP" ? (
                   <button className="btn" disabled={pending} onClick={() => onOverride(selected.id, "SHIP")}>
+                    <Icon as={BADGE_ICON.SHIP} />
                     {selected.recommendation === "HOLD" ? "Release: ship anyway" : "Approve: ship it"}
                   </button>
                 ) : null}
                 {selected.recommendation !== "HOLD" ? (
                   <button className="btn btn-danger" disabled={pending} onClick={() => onOverride(selected.id, "HOLD")}>
+                    <Icon as={BADGE_ICON.HOLD} />
                     Hold this order
                   </button>
                 ) : null}

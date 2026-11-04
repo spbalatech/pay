@@ -1,44 +1,42 @@
 "use client";
 
 import type { ICellRendererParams } from "ag-grid-community";
+import { Minus } from "lucide-react";
+import { Icon, BADGE_ICON } from "../icons";
 
 /**
- * Status is never carried by color alone: every badge ships a glyph and a
- * word, so it survives CVD, grayscale print and forced-colors.
+ * Status is never carried by color alone: every badge ships an icon and a
+ * word, so it survives CVD, grayscale print and forced-colors. The icon also
+ * says what the state means (a hand for hold, a truck for ship), not just how
+ * severe it is.
  */
-export function TierBadge(p: ICellRendererParams) {
-  if (!p.value) return null;
-  const map: Record<string, { cls: string; glyph: string }> = {
-    HOLD: { cls: "badge-critical", glyph: "■" },
-    REVIEW: { cls: "badge-warning", glyph: "▲" },
-    CLEAR: { cls: "badge-good", glyph: "●" },
-  };
-  const s = map[String(p.value)] ?? { cls: "badge-muted", glyph: "·" };
+function Badge({ cls, code, label }: { cls: string; code: string; label: string }) {
   return (
-    <span className={`badge ${s.cls}`}>
-      <span aria-hidden>{s.glyph}</span>
-      {String(p.value).toLowerCase()}
+    <span className={`badge ${cls}`}>
+      <Icon as={BADGE_ICON[code] ?? Minus} size={12} />
+      {label}
     </span>
   );
+}
+
+export function TierBadge(p: ICellRendererParams) {
+  if (!p.value) return null;
+  const cls: Record<string, string> = { HOLD: "badge-critical", REVIEW: "badge-warning", CLEAR: "badge-good" };
+  const v = String(p.value);
+  return <Badge cls={cls[v] ?? "badge-muted"} code={v} label={v.toLowerCase()} />;
 }
 
 export function RecommendationBadge(p: ICellRendererParams) {
   if (!p.value) return null;
   const v = String(p.value);
-  const map: Record<string, { cls: string; glyph: string }> = {
-    FIGHT: { cls: "badge-warning", glyph: "▲" },
-    ACCEPT: { cls: "badge-muted", glyph: "·" },
-    HOLD: { cls: "badge-critical", glyph: "■" },
-    VERIFY: { cls: "badge-warning", glyph: "▲" },
-    SHIP: { cls: "badge-good", glyph: "●" },
+  const cls: Record<string, string> = {
+    FIGHT: "badge-warning",
+    ACCEPT: "badge-muted",
+    HOLD: "badge-critical",
+    VERIFY: "badge-warning",
+    SHIP: "badge-good",
   };
-  const s = map[v] ?? { cls: "badge-muted", glyph: "·" };
-  return (
-    <span className={`badge ${s.cls}`}>
-      <span aria-hidden>{s.glyph}</span>
-      {v.toLowerCase()}
-    </span>
-  );
+  return <Badge cls={cls[v] ?? "badge-muted"} code={v} label={v.toLowerCase()} />;
 }
 
 export function SourceBadge(p: ICellRendererParams) {
@@ -64,26 +62,9 @@ export function SourceBadge(p: ICellRendererParams) {
 export function DueCell(p: ICellRendererParams) {
   if (!p.value) return <span style={{ color: "var(--ink-muted)" }}>—</span>;
   const days = Math.ceil((new Date(String(p.value)).getTime() - Date.now()) / 86_400_000);
-  if (days < 0)
-    return (
-      <span className="badge badge-critical">
-        <span aria-hidden>■</span>overdue
-      </span>
-    );
-  if (days <= 2)
-    return (
-      <span className="badge badge-critical">
-        <span aria-hidden>■</span>
-        {days}d left
-      </span>
-    );
-  if (days <= 5)
-    return (
-      <span className="badge badge-warning">
-        <span aria-hidden>▲</span>
-        {days}d left
-      </span>
-    );
+  if (days < 0) return <Badge cls="badge-critical" code="OVERDUE" label="overdue" />;
+  if (days <= 2) return <Badge cls="badge-critical" code="DUE_SOON" label={`${days}d left`} />;
+  if (days <= 5) return <Badge cls="badge-warning" code="DUE_SOON" label={`${days}d left`} />;
   return <span style={{ color: "var(--ink-secondary)" }}>{days}d left</span>;
 }
 
@@ -113,21 +94,16 @@ export function ScoreCell(p: ICellRendererParams) {
   );
 }
 
-/** Dispute lifecycle as a word plus glyph: open cases are the ones to act on. */
+/** Dispute lifecycle as a word plus icon: open cases are the ones to act on. */
 export function StatusCell(p: ICellRendererParams) {
   if (!p.value) return null;
   const v = String(p.value);
-  const map: Record<string, { cls: string; glyph: string; label: string }> = {
-    OPEN: { cls: "badge-warning", glyph: "▲", label: "open" },
-    WON: { cls: "badge-good", glyph: "●", label: "won" },
-    LOST: { cls: "badge-critical", glyph: "■", label: "lost" },
-    ACCEPTED: { cls: "badge-muted", glyph: "·", label: "accepted" },
+  const map: Record<string, { cls: string; label: string }> = {
+    OPEN: { cls: "badge-warning", label: "open" },
+    WON: { cls: "badge-good", label: "won" },
+    LOST: { cls: "badge-critical", label: "lost" },
+    ACCEPTED: { cls: "badge-muted", label: "accepted" },
   };
-  const s = map[v] ?? { cls: "badge-muted", glyph: "·", label: v.toLowerCase() || "closed" };
-  return (
-    <span className={`badge ${s.cls}`}>
-      <span aria-hidden>{s.glyph}</span>
-      {s.label}
-    </span>
-  );
+  const s = map[v] ?? { cls: "badge-muted", label: v.toLowerCase() || "closed" };
+  return <Badge cls={s.cls} code={v} label={s.label} />;
 }

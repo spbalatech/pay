@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { WatchGrid, type WatchRow } from "@/components/grids/WatchGrid";
+import { Icon, NAV_ICON } from "@/components/icons";
 
 export const dynamic = "force-dynamic";
 
@@ -49,7 +50,7 @@ export default async function WatchlistPage() {
   return (
     <>
       <div className="page-head">
-        <h1 className="page-title">Watchlist</h1>
+        <h1 className="page-title"><Icon as={NAV_ICON["/watchlist"]} size={22} className="title-icon" />Watchlist</h1>
         <p className="page-sub">
           Disputes that have not been filed yet. Interceptor watches the post-payment lifecycle for
           early warning signs — a parcel that stopped moving, a missed promise date, a subscription renewed
