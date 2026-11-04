@@ -60,7 +60,7 @@ export function DisputeGrid({ rows }: { rows: DisputeRow[] }) {
         rowGroup: true,
         hide: true,
       },
-      { headerName: "Status", width: 125, valueGetter: (p) => (!p.data ? null : isClosed(p.data) ? (p.data.outcome ?? "CLOSED") : "OPEN"), cellRenderer: StatusCell },
+      { colId: "status", headerName: "Status", width: 125, valueGetter: (p) => (!p.data ? null : isClosed(p.data) ? (p.data.outcome ?? "CLOSED") : "OPEN"), cellRenderer: StatusCell },
       { field: "payerEmail", headerName: "Payer", minWidth: 175, flex: 1 },
       { field: "amount", headerName: "Claim", width: 118, type: "numericColumn", valueFormatter: moneyFmt, aggFunc: "sum" },
       { field: "pWin", headerName: "Win chance", width: 118, type: "numericColumn", valueFormatter: pctFmt },
@@ -94,6 +94,7 @@ export function DisputeGrid({ rows }: { rows: DisputeRow[] }) {
         rowData={rows}
         columnDefs={columnDefs}
         height={520}
+        phoneColumns={["amount", "status"]}
         getRowId={(p) => p.data.id}
         onRowClicked={(e) => setSelected(e.data ?? null)}
         autoGroupColumnDef={{

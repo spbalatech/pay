@@ -83,6 +83,8 @@ export function OrderGrid({ rows }: { rows: OrderRow[] }) {
   const onOverride = useCallback((orderId: string, rec: "SHIP" | "HOLD") => {
     startTransition(async () => {
       await overrideOrderAction(orderId, rec);
+      // The panel holds a copy of the row; close it so stale buttons never show.
+      setSelected(null);
     });
   }, []);
 
@@ -92,6 +94,7 @@ export function OrderGrid({ rows }: { rows: OrderRow[] }) {
         rowData={rows}
         columnDefs={columnDefs}
         height={520}
+        phoneColumns={["amount", "score"]}
         getRowId={(p) => p.data.id}
         onRowClicked={(e) => setSelected(e.data ?? null)}
         getRowClass={(p) =>
@@ -145,13 +148,13 @@ export function OrderGrid({ rows }: { rows: OrderRow[] }) {
                   <dd>{selected.shippingLine1 ?? "—"}</dd>
                 </div>
                 <div className="kv">
-                  <dt>Multi-unit</dt>
+                  <dt>Shared building (flat, unit)</dt>
                   <dd>{selected.multiUnit ? "yes" : "no"}</dd>
                 </div>
               </dl>
 
               <h4 className="detail-h" style={{ marginTop: 12 }}>
-                Likely reason codes
+                If disputed, likely as
               </h4>
               <p className="detail-p" style={{ margin: 0 }}>
                 {selected.predictedReasonCodes.length
@@ -175,13 +178,18 @@ export function OrderGrid({ rows }: { rows: OrderRow[] }) {
                 </>
               ) : null}
 
+              {/* Offer only the action that changes something: no "Hold" on an order already held. */}
               <div className="btn-row" style={{ marginTop: 14 }}>
-                <button className="btn" disabled={pending} onClick={() => onOverride(selected.id, "SHIP")}>
-                  Override: ship anyway
-                </button>
-                <button className="btn btn-danger" disabled={pending} onClick={() => onOverride(selected.id, "HOLD")}>
-                  Hold
-                </button>
+                {selected.recommendation !== "SHIP" ? (
+                  <button className="btn" disabled={pending} onClick={() => onOverride(selected.id, "SHIP")}>
+                    {selected.recommendation === "HOLD" ? "Release: ship anyway" : "Approve: ship it"}
+                  </button>
+                ) : null}
+                {selected.recommendation !== "HOLD" ? (
+                  <button className="btn btn-danger" disabled={pending} onClick={() => onOverride(selected.id, "HOLD")}>
+                    Hold this order
+                  </button>
+                ) : null}
               </div>
             </div>
           </div>

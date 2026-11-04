@@ -26,7 +26,6 @@ export function AuditGrid({ rows }: { rows: AuditRow[] }) {
           p.value ? new Date(String(p.value)).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "",
         sort: "desc",
       },
-      { field: "action", headerName: "Action", width: 215, valueFormatter: (p) => humanCode(String(p.value)) },
       { field: "targetType", headerName: "Target", width: 120 },
       { field: "payload", headerName: "Detail", flex: 1, minWidth: 320, cellStyle: { fontFamily: "var(--mono)", fontSize: "11px" } },
     ],
@@ -38,8 +37,16 @@ export function AuditGrid({ rows }: { rows: AuditRow[] }) {
       rowData={rows}
       columnDefs={columnDefs}
       height={620}
+      phoneColumns={["at"]}
       getRowId={(p) => p.data.id}
-      autoGroupColumnDef={{ headerName: "Actor", minWidth: 200 }}
+      // Leaf rows show their action in the group column, which was otherwise
+      // blank under each actor heading, the same way the other queues show ids.
+      autoGroupColumnDef={{
+        headerName: "Actor / action",
+        field: "action",
+        minWidth: 240,
+        valueFormatter: (p) => (p.value ? humanCode(String(p.value)) : ""),
+      }}
     />
   );
 }

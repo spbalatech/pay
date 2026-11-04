@@ -47,7 +47,7 @@ export function WatchGrid({ rows }: { rows: WatchRow[] }) {
     () => [
       {
         field: "precursor",
-        headerName: "Precursor",
+        headerName: "Warning sign",
         width: 190,
         valueFormatter: (p) => humanCode(String(p.value)),
         rowGroup: true,
@@ -88,11 +88,12 @@ export function WatchGrid({ rows }: { rows: WatchRow[] }) {
         rowData={rows}
         columnDefs={columnDefs}
         height={470}
+        phoneColumns={["amountAtRisk"]}
         getRowId={(p) => p.data.id}
         onRowClicked={(e) => setSelected(e.data ?? null)}
         getRowClass={(p) => (p.data && p.data.severity >= 75 ? "row-hold" : p.data && p.data.severity >= 55 ? "row-review" : "")}
         autoGroupColumnDef={{
-          headerName: "Precursor / order",
+          headerName: "Warning sign / order",
           field: "paypalOrderId",
           minWidth: 240,
           cellClass: (p: { node: { group?: boolean } }) => (p.node.group ? "" : "cell-id"),

@@ -2,13 +2,15 @@ import { db } from "@/lib/db";
 import { calibration } from "@/agents/learner";
 import { RuleCard, ProposeButton } from "@/components/RuleCard";
 import { WIN_RATE_PRIORS } from "@/agents/ev";
+import { aiAvailable } from "@/lib/ai";
 
 export const dynamic = "force-dynamic";
 
 export default async function RulebookPage() {
-  const [rules, cal] = await Promise.all([
+  const [rules, cal, hasModel] = await Promise.all([
     db.rule.findMany({ orderBy: [{ status: "asc" }, { createdAt: "desc" }] }),
     calibration(),
+    aiAvailable(),
   ]);
 
   const proposed = rules.filter((r) => r.status === "PROPOSED");
@@ -47,8 +49,17 @@ export default async function RulebookPage() {
       </h2>
       {proposed.length === 0 ? (
         <div className="empty">
-          No proposals. Learner needs at least three resolved disputes sharing a pattern before it
-          will generalise — &ldquo;not yet&rdquo; is a valid answer.
+          {hasModel ? (
+            <>
+              No proposals. Learner needs at least three resolved disputes sharing a pattern before it
+              will generalise — &ldquo;not yet&rdquo; is a valid answer.
+            </>
+          ) : (
+            <>
+              No AI model is connected, so Learner cannot write rules yet. Add an Anthropic API key
+              (or run a local model), then press &ldquo;Look for new patterns&rdquo;.
+            </>
+          )}
         </div>
       ) : (
         proposed.map((r) => <RuleCard key={r.id} rule={serialize(r)} />)
@@ -77,17 +88,18 @@ export default async function RulebookPage() {
       <div className="card" style={{ marginTop: 26 }}>
         <h3 className="card-title">Win-rate calibration</h3>
         <p className="detail-p">
-          The expected-value engine starts from documented priors, not measured truths. Once a reason
-          code has five resolved cases, your own observed rate replaces the prior.
+          The fight-or-accept maths starts from built-in estimated win rates, which are starting
+          guesses, not facts about your shop. Once a dispute reason has five resolved cases, your own win rate
+          replaces the estimate.
         </p>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
           <thead>
             <tr style={{ textAlign: "left", color: "var(--ink-muted)" }}>
-              <th style={{ padding: "6px 0", fontWeight: 500 }}>Reason code</th>
-              <th style={{ padding: "6px 0", fontWeight: 500 }}>Seed prior</th>
-              <th style={{ padding: "6px 0", fontWeight: 500 }}>Your observed rate</th>
-              <th style={{ padding: "6px 0", fontWeight: 500 }}>Sample</th>
-              <th style={{ padding: "6px 0", fontWeight: 500 }}>In use</th>
+              <th style={{ padding: "6px 8px 6px 0", fontWeight: 500 }}>Dispute reason</th>
+              <th style={{ padding: "6px 8px 6px 0", fontWeight: 500 }}>Starting estimate</th>
+              <th style={{ padding: "6px 8px 6px 0", fontWeight: 500 }}>Your win rate</th>
+              <th style={{ padding: "6px 8px 6px 0", fontWeight: 500 }}>Cases</th>
+              <th style={{ padding: "6px 0", fontWeight: 500 }}>Using</th>
             </tr>
           </thead>
           <tbody style={{ fontVariantNumeric: "tabular-nums" }}>
@@ -111,7 +123,7 @@ export default async function RulebookPage() {
                   <td style={{ padding: "7px 0" }}>
                     <span className={`badge ${c.calibrated ? "badge-good" : "badge-muted"}`}>
                       <span aria-hidden>{c.calibrated ? "●" : "·"}</span>
-                      {c.calibrated ? "yours" : "prior"}
+                      {c.calibrated ? "yours" : "estimate"}
                     </span>
                   </td>
                 </tr>
