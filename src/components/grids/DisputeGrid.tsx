@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import type { ColDef } from "ag-grid-community";
-import { GridShell, moneyFmt, dateFmt, pctFmt, humanCode } from "./GridShell";
+import { GridShell, useRevealOnSelect, moneyFmt, dateFmt, pctFmt, humanCode } from "./GridShell";
 import { RecommendationBadge, SourceBadge, DueCell } from "./cells";
 import { decideDisputeAction } from "@/app/actions";
 
@@ -33,6 +33,7 @@ export type DisputeRow = {
 
 export function DisputeGrid({ rows }: { rows: DisputeRow[] }) {
   const [selected, setSelected] = useState<DisputeRow | null>(null);
+  const detailRef = useRevealOnSelect(selected);
   const [pending, startTransition] = useTransition();
 
   const columnDefs = useMemo<ColDef<DisputeRow>[]>(
@@ -47,7 +48,6 @@ export function DisputeGrid({ rows }: { rows: DisputeRow[] }) {
         rowGroup: true,
         hide: true,
       },
-      { field: "paypalDisputeId", headerName: "Dispute", width: 180, cellStyle: { fontFamily: "var(--mono)", fontSize: "11.5px" } },
       { field: "payerEmail", headerName: "Payer", minWidth: 175, flex: 1 },
       { field: "amount", headerName: "Claim", width: 118, type: "numericColumn", valueFormatter: moneyFmt, aggFunc: "sum" },
       { field: "evidenceStrength", headerName: "Evidence", width: 112, type: "numericColumn", valueFormatter: (p) => (p.value == null ? "" : `${p.value}%`) },
@@ -70,11 +70,16 @@ export function DisputeGrid({ rows }: { rows: DisputeRow[] }) {
         height={520}
         getRowId={(p) => p.data.id}
         onRowClicked={(e) => setSelected(e.data ?? null)}
-        autoGroupColumnDef={{ headerName: "Reason code", minWidth: 260 }}
+        autoGroupColumnDef={{
+          headerName: "Reason / dispute",
+          field: "paypalDisputeId",
+          minWidth: 260,
+          cellClass: (p: { node: { group?: boolean } }) => (p.node.group ? "" : "cell-id"),
+        }}
       />
 
       {selected ? (
-        <div className="card" style={{ marginTop: 14 }}>
+        <div ref={detailRef} className="card" style={{ marginTop: 14, scrollMarginTop: 16 }}>
           <h3 className="card-title">
             {humanCode(selected.reasonCode)} · ${selected.amount.toFixed(2)} · {selected.paypalDisputeId}
           </h3>

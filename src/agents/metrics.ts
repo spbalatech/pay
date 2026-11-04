@@ -29,6 +29,8 @@ export async function dashboardMetrics() {
 
   const retainedByDefence = won.reduce((s, r) => s + Number(r.dispute.amount) + DISPUTE_FEE_USD, 0);
   const escalated = await db.watch.count({ where: { status: "ESCALATED_TO_DISPUTE" } });
+  // Same filter as the sidebar badge, so the two numbers always agree.
+  const openDisputes = await db.dispute.count({ where: { status: { notIn: ["RESOLVED", "CLOSED"] } } });
 
   return {
     orders,
@@ -39,6 +41,7 @@ export async function dashboardMetrics() {
     valueDeflected: round2(deflectedValue),
     escalatedToDispute: escalated,
     disputes,
+    openDisputes,
     disputesContested: contested,
     winRate: contested ? won.length / contested : null,
     disputesAccepted: accepted,

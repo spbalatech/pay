@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useState, useTransition } from "react";
 import type { ColDef } from "ag-grid-community";
-import { GridShell, moneyFmt, dateFmt } from "./GridShell";
+import { GridShell, useRevealOnSelect, moneyFmt, dateFmt } from "./GridShell";
 import { TierBadge, RecommendationBadge, SourceBadge, ScoreCell } from "./cells";
 import { overrideOrderAction } from "@/app/actions";
 
@@ -26,6 +26,7 @@ export type OrderRow = {
 
 export function OrderGrid({ rows }: { rows: OrderRow[] }) {
   const [selected, setSelected] = useState<OrderRow | null>(null);
+  const detailRef = useRevealOnSelect(selected);
   const [pending, startTransition] = useTransition();
 
   const columnDefs = useMemo<ColDef<OrderRow>[]>(
@@ -40,7 +41,6 @@ export function OrderGrid({ rows }: { rows: OrderRow[] }) {
         rowGroup: true,
         hide: true,
       },
-      { field: "paypalOrderId", headerName: "Order", width: 185, cellStyle: { fontFamily: "var(--mono)", fontSize: "11.5px" } },
       { field: "payerEmail", headerName: "Payer", minWidth: 190, flex: 1 },
       {
         field: "amount",
@@ -75,11 +75,18 @@ export function OrderGrid({ rows }: { rows: OrderRow[] }) {
         getRowClass={(p) =>
           p.data?.tier === "HOLD" ? "row-hold" : p.data?.tier === "REVIEW" ? "row-review" : ""
         }
-        autoGroupColumnDef={{ headerName: "Risk tier", minWidth: 190, cellRendererParams: { suppressCount: false } }}
+        autoGroupColumnDef={{
+          // Leaf rows put the order id in the group column instead of leaving it blank.
+          headerName: "Tier / order",
+          field: "paypalOrderId",
+          minWidth: 210,
+          cellRendererParams: { suppressCount: false },
+          cellClass: (p: { node: { group?: boolean } }) => (p.node.group ? "" : "cell-id"),
+        }}
       />
 
       {selected ? (
-        <div className="card" style={{ marginTop: 14 }}>
+        <div ref={detailRef} className="card" style={{ marginTop: 14, scrollMarginTop: 16 }}>
           <h3 className="card-title">
             {selected.paypalOrderId} · ${selected.amount.toFixed(2)} · {selected.payerEmail}
           </h3>

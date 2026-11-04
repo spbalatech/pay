@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { AgGridReact, type AgGridReactProps } from "ag-grid-react";
 import type { ColDef, GridOptions } from "ag-grid-community";
 import { useResolvedTheme } from "../ThemeToggle";
@@ -61,6 +61,21 @@ export function GridShell<T>({
       <AgGridReact<T> rowData={rowData} columnDefs={columnDefs} {...options} {...rest} />
     </div>
   );
+}
+
+/**
+ * The detail card renders below a tall grid, so a row click would otherwise
+ * change nothing on screen. Bring the card into view whenever the selection
+ * changes.
+ */
+export function useRevealOnSelect(selected: unknown) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!selected) return;
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    ref.current?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+  }, [selected]);
+  return ref;
 }
 
 /* ----------------------------------------------------------- formatters */

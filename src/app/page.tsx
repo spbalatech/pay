@@ -50,54 +50,56 @@ npm run agents:run`}</pre>
         </p>
       </div>
 
-      {!caps.paypal || !ai.available ? (
-        <div className="notice">
-          <span aria-hidden>⚙</span>
-          <span>
-            {!caps.paypal ? (
-              <>
-                No PayPal sandbox credentials, so live writes are off — everything else
-                runs on seeded data.{" "}
-              </>
-            ) : null}
-            {ai.available ? (
-              <>
-                Model provider: <strong>{ai.provider}</strong> ({ai.reasoning}).
-              </>
-            ) : (
-              <>
-                No model provider: {ai.hint} Sentinel, Interceptor and Advocate run
-                regardless — their scores are arithmetic. Only the Learner needs one.
-              </>
-            )}
-          </span>
-        </div>
-      ) : (
-        <div className="notice">
-          <span aria-hidden>✓</span>
-          <span>
-            PayPal sandbox connected · model provider <strong>{ai.provider}</strong> ({ai.reasoning}).
-          </span>
-        </div>
-      )}
-
-      {simulatedShare && simulatedShare.simulated > 0 ? (
-        <div className="notice">
-          <span aria-hidden>ℹ</span>
-          <span>
-            {simulatedShare.simulated} of {simulatedShare.total} orders and all disputes are{" "}
-            <strong>fixtures</strong> — the PayPal sandbox cannot originate inbound disputes or
-            capture a payment without a browser. Every agent <em>action</em> runs against the live
-            sandbox API. Simulated rows are badged throughout.
-          </span>
-        </div>
-      ) : null}
-
       <Hero
         label="Total value protected"
         value={money(m.totalValueProtected)}
         note={`${m.disputesDeflected} dispute${m.disputesDeflected === 1 ? "" : "s"} deflected before filing · ${m.disputesContested} contested`}
       />
+      {/* One collapsed line instead of two paragraphs, so the headline number
+          stays above the fold. The full explanation is one click away. */}
+      <details className="notice notice-fold">
+        <summary>
+          <span aria-hidden>{caps.paypal && ai.available ? "✓" : "ℹ"}</span>
+          <span>
+            {[
+              caps.paypal ? "PayPal sandbox connected" : "No PayPal credentials",
+              ai.available ? `model: ${ai.provider}` : "no model provider",
+              simulatedShare && simulatedShare.simulated > 0
+                ? `${simulatedShare.simulated} of ${simulatedShare.total} orders are fixtures`
+                : null,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+          </span>
+          <span className="notice-more">Details</span>
+        </summary>
+        <div className="notice-body">
+          {!caps.paypal ? (
+            <p>
+              No PayPal sandbox credentials, so live writes are off — everything else runs on
+              seeded data.
+            </p>
+          ) : null}
+          {ai.available ? (
+            <p>
+              Model provider: <strong>{ai.provider}</strong> ({ai.reasoning}).
+            </p>
+          ) : (
+            <p>
+              No model provider: {ai.hint} Sentinel, Interceptor and Advocate run regardless —
+              their scores are arithmetic. Only the Learner needs one.
+            </p>
+          )}
+          {simulatedShare && simulatedShare.simulated > 0 ? (
+            <p>
+              {simulatedShare.simulated} of {simulatedShare.total} orders and all disputes are{" "}
+              <strong>fixtures</strong> — the PayPal sandbox cannot originate inbound disputes or
+              capture a payment without a browser. Every agent <em>action</em> runs against the live
+              sandbox API. Simulated rows are badged throughout.
+            </p>
+          ) : null}
+        </div>
+      </details>
 
       <div className="card">
         <h3 className="card-title">Where the protection came from</h3>
@@ -121,7 +123,7 @@ npm run agents:run`}</pre>
           value={pct(m.winRate)}
           note={`${m.disputesContested} contested, ${m.disputesAccepted} accepted on EV`}
         />
-        <Tile label="Open disputes" value={m.disputes} note="across all reason codes" />
+        <Tile label="Open disputes" value={m.openDisputes} note={`${m.disputes} filed in total`} />
         <Tile
           label="Prevention rules"
           value={m.activeRules}

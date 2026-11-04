@@ -274,8 +274,23 @@ a { color: inherit; text-decoration: none; }
   --ag-row-height: 38px;
   --ag-header-height: 38px;
 }
-.ag-theme-quartz { --ag-background-color: #fcfcfb; --ag-header-background-color: #f9f9f7; }
-.ag-theme-quartz-dark { --ag-background-color: #1a1a19; --ag-header-background-color: #222221; }
+/* AG Grid's theme stylesheet loads after this file, so plain class selectors
+   lose. The .main prefix outranks it and maps the grid onto the app tokens. */
+.main .ag-theme-quartz,
+.main .ag-theme-quartz-dark {
+  --ag-background-color: var(--surface);
+  --ag-foreground-color: var(--ink);
+  --ag-header-background-color: var(--plane);
+  --ag-control-panel-background-color: var(--plane);
+  --ag-tooltip-background-color: var(--surface-raised);
+  --ag-menu-background-color: var(--surface-raised);
+  --ag-panel-background-color: var(--surface-raised);
+  --ag-border-color: var(--hairline);
+  --ag-row-border-color: var(--hairline);
+  --ag-active-color: var(--prevent);
+  --ag-row-hover-color: color-mix(in srgb, var(--prevent) 8%, transparent);
+  --ag-selected-row-background-color: color-mix(in srgb, var(--prevent) 14%, transparent);
+}
 
 /* Risk tier row tint. Kept faint: the tier badge in the cell carries the
    meaning, the tint only groups the eye. */
@@ -347,3 +362,23 @@ a { color: inherit; text-decoration: none; }
   .main { padding: 18px 16px 48px; }
   .hero-value { font-size: 38px; }
 }
+
+/* Order and dispute ids shown in a grid's group column. */
+.cell-id { font-family: var(--mono); font-size: 12px; color: var(--ink-secondary); }
+
+/* Collapsible status line on the overview. */
+.notice-fold { display: block; padding: 0; }
+.notice-fold summary {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  padding: 9px 13px;
+  cursor: pointer;
+  list-style: none;
+}
+.notice-fold summary::-webkit-details-marker { display: none; }
+.notice-more { margin-left: auto; color: var(--ink-muted); white-space: nowrap; }
+.notice-more::after { content: " ▾"; }
+.notice-fold[open] .notice-more::after { content: " ▴"; }
+.notice-body { padding: 0 13px 4px 34px; }
+.notice-body p { margin: 0 0 8px; }

@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import type { ColDef } from "ag-grid-community";
-import { GridShell, moneyFmt, dateFmt, humanCode } from "./GridShell";
+import { GridShell, useRevealOnSelect, moneyFmt, dateFmt, humanCode } from "./GridShell";
 import { SourceBadge, ScoreCell } from "./cells";
 import { approveInterventionAction, dismissWatchAction } from "@/app/actions";
 
@@ -39,6 +39,7 @@ const KIND_LABEL: Record<string, string> = {
 
 export function WatchGrid({ rows }: { rows: WatchRow[] }) {
   const [selected, setSelected] = useState<WatchRow | null>(null);
+  const detailRef = useRevealOnSelect(selected);
   const [pending, startTransition] = useTransition();
 
   const columnDefs = useMemo<ColDef<WatchRow>[]>(
@@ -51,7 +52,6 @@ export function WatchGrid({ rows }: { rows: WatchRow[] }) {
         rowGroup: true,
         hide: true,
       },
-      { field: "paypalOrderId", headerName: "Order", width: 185, cellStyle: { fontFamily: "var(--mono)", fontSize: "11.5px" } },
       { field: "payerEmail", headerName: "Payer", minWidth: 180, flex: 1 },
       {
         field: "amountAtRisk",
@@ -90,11 +90,16 @@ export function WatchGrid({ rows }: { rows: WatchRow[] }) {
         getRowId={(p) => p.data.id}
         onRowClicked={(e) => setSelected(e.data ?? null)}
         getRowClass={(p) => (p.data && p.data.severity >= 75 ? "row-hold" : p.data && p.data.severity >= 55 ? "row-review" : "")}
-        autoGroupColumnDef={{ headerName: "Precursor", minWidth: 230 }}
+        autoGroupColumnDef={{
+          headerName: "Precursor / order",
+          field: "paypalOrderId",
+          minWidth: 240,
+          cellClass: (p: { node: { group?: boolean } }) => (p.node.group ? "" : "cell-id"),
+        }}
       />
 
       {selected ? (
-        <div className="card" style={{ marginTop: 14 }}>
+        <div ref={detailRef} className="card" style={{ marginTop: 14, scrollMarginTop: 16 }}>
           <h3 className="card-title">
             {humanCode(selected.precursor)} · {selected.paypalOrderId} · ${selected.amountAtRisk.toFixed(2)} at risk
           </h3>
