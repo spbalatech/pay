@@ -1,0 +1,60 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## What this is
+
+Aegis (package name `aegis`, repo `spbalatech/pay`): a Next.js 14 (App Router) + Prisma/Postgres app for the PayPal AI Hackathon. A closed loop of four agents defends PayPal merchants against chargebacks: **Sentinel** (pre-fulfillment order risk) → **Interceptor** (post-payment dispute precursors) → **Advocate** (filed-dispute defense) → **Learner** (lost outcomes → proposed prevention rules, which Sentinel then enforces). README.md is detailed and accurate; read it for the PayPal endpoint list, webhook contract and demo-data caveats.
+
+## Commands
+
+```bash
+docker compose up -d            # Postgres on localhost:55439 (user/pass/db: aegis)
+npx prisma migrate deploy       # apply migrations
+npm run seed -- --offline       # 90-day demo history without PayPal credentials (drop --offline to hit the sandbox)
+npm run agents:run              # one full pass: sync → sentinel → interceptor → advocate → learner
+npm run dev                     # console at http://localhost:3000
+
+npm run typecheck               # tsc --noEmit
+npm run lint                    # next lint
+npm run build                   # NOTE: also runs prisma generate + migrate deploy
+
+npm run ai:check                # which model provider is live + a round trip
+npm run paypal:check            # exercise every PayPal endpoint Aegis uses
+npm run mcp:check               # PayPal MCP transport (AEGIS_PAYPAL_MCP_MODE=remote for hosted)
+npm run sync                    # reconcile disputes with PayPal only
+npm run webhook -- register|list|simulate|delete ...
+```
+
+There is no test suite; verification is `typecheck`, `lint`, the `*:check` scripts, and `agents:run` against seeded data. Scripts run via `tsx` and load `.env` through `dotenv/config`.
+
+## Architecture
+
+- **Scores are arithmetic, never model output.** `src/agents/signals.ts` (weighted risk signals) and `src/agents/ev.ts` (expected value of fight vs. accept, per-reason-code win-rate priors, evidence checklists) are deterministic. The model only writes language: explanations, buyer outreach, rebuttals, and Learner rule proposals. Keep it that way: don't let an LLM produce a score, EV or decision.
+- **Closed rule language.** `src/agents/rules.ts` defines the only predicates a prevention rule may use. The Learner must cite ≥3 real disputes per proposal; anything else is discarded before a human sees it. Rules need human approval before Sentinel enforces them.
+- **Agents** live in `src/agents/*.ts`, each exporting a `run*` function plus execute/approve functions. Every agent upserts, so passes are re-runnable. Entry points: `scripts/run-agents.ts` (CLI), `src/app/actions.ts` (server actions for the UI; human actions are attributed as `human:operator`), and `src/agents/ingest.ts` (webhook events → domain handlers). `src/agents/sync.ts` reconciles disputes from PayPal.
+- **Audit log is the source of truth for "what happened".** `src/lib/activity.ts` builds the console's activity feed from `AuditLog`; agent actions must be recorded there.
+- **Graceful degradation is a design requirement.** `src/lib/env.ts` (zod) makes all credentials optional; only `DATABASE_URL` is required. Missing PayPal creds disable live writes; missing model disables only the Learner and drafted text (Sentinel/Interceptor/Advocate still work fully). Empty `.env` values are treated as unset.
+- **AI provider layer** `src/lib/ai/`: one interface (`types.ts`), Anthropic and Ollama implementations, selected in `index.ts` by `AEGIS_AI_PROVIDER` (`auto|anthropic|ollama|none`, 30s cached). Structured output uses a forced tool call (Anthropic) or JSON-schema-constrained `format` (Ollama). Import from `@/lib/ai`; `claude.ts` is a deprecated re-export.
+- **PayPal layer** `src/lib/paypal/`: `client.ts` (token cache, idempotency keys on writes, backoff on 429/5xx), `api.ts` (typed endpoints), `transport.ts` routes five operations through either REST or PayPal's MCP server (`mcp.ts`) per `AEGIS_PAYPAL_TRANSPORT`; everything else stays on REST. MCP tool schemas differ from REST bodies (e.g. `create_invoice` flattens currency), and the hosted MCP server reports write failures as `{"ok":false}` in a 200 body, not via `isError`.
+- **Webhook receiver** `src/app/api/webhooks/paypal/route.ts` + `src/lib/paypal/webhooks.ts`: verifies the signature on the **raw body** before trusting anything, returns 200 fast and processes after, dedupes by event id (`WebhookEvent`). `AEGIS_WEBHOOK_ALLOW_UNVERIFIED` accepts only the literal strings `true`/`false` (anything else fails boot); don't change that to `z.coerce.boolean()`.
+- **Data provenance.** Every externally-derived row has a `source` of `LIVE_SANDBOX` or `SIMULATED` (`prisma/schema.prisma`); the UI badges simulated rows. Seeded disputes are fixtures because the sandbox can't originate buyer disputes; preserve this labeling.
+- **UI**: pages in `src/app/{disputes,orders,watchlist,rulebook,audit}`, tables are AG Grid (community + enterprise, v32) under `src/components/grids/`.
+
+## Safety defaults (enforced in code, keep them)
+
+- `AEGIS_AUTO_ACCEPT_CEILING_USD` defaults to `0` (off) per PayPal guidance; before any `accept-claim` the dispute is re-read and `allowed_response_options` checked.
+- Rebuttals always require a human. `AEGIS_AUTO_REFUND_CEILING_USD` (25) and `AEGIS_HOLD_THRESHOLD` (70) bound autonomy.
+
+## Deployment
+
+`render.yaml` is a one-click Render blueprint; on start it runs `migrate deploy`, then `scripts/demo-boot.ts` (seeds + one agent pass only when the DB is empty), then `next start`. Render deploys from `main`.
+
+## Handoff: after the `ui-polish` branch is merged into `main`
+
+`ui-polish` (UI redesign, phone layout for the grids, Render blueprint) was written by a teammate; the next step for the hackathon is a hosted demo on Render. When you are working on `main` after that merge:
+
+1. **Check the merge first.** Confirm there are no leftover conflict markers, then run `npm run typecheck` and `npx prisma generate && npx next build` (the same build Render runs; unlike `npm run build`, it does not touch the database). Report anything that fails before going further.
+2. **Then suggest deploying to Render, and ask before doing anything.** Explain what a deploy does (creates a free Postgres database and web service from `render.yaml`, seeds demo data on first boot) and ask the person you are working with whether they want to deploy now. Take no deploy step (Render dashboard, Render CLI/API, a deploy-triggering push) without their explicit yes.
+3. **Secrets are set by a human in Render's Environment tab, never in `render.yaml` or any committed file.** Remind them that without `ANTHROPIC_API_KEY` there the Learner proposes no rules, so the Rulebook in the demo stays empty. That rule is the moment the loop closes, so it matters for judging.
+4. Once this handoff is done, remove this section.
