@@ -71,13 +71,37 @@ export function GridShell<T>({
     });
   }, [columnDefs, phoneColumns, phone]);
 
+  // When the grouped column draws plain text (no badge renderer), a phone puts
+  // the count inside the name, so a wrapped name ends "...described (7)"
+  // instead of leaving "(7)" floating beside a three-line block.
+  const plainGroupText = !columnDefs.some((c) => c.rowGroup && c.cellRenderer);
+
   const groupCol = useMemo(
     () =>
       phone && autoGroupColumnDef
-        ? // Group names ("Significantly not as described") wrap rather than truncate.
-          { ...autoGroupColumnDef, ...PHONE_HEADER, minWidth: 120, flex: 1.6, wrapText: true, autoHeight: true }
+        ? {
+            ...autoGroupColumnDef,
+            ...PHONE_HEADER,
+            minWidth: 120,
+            flex: 1.6,
+            // Group names ("Significantly not as described") wrap rather than truncate.
+            wrapText: true,
+            autoHeight: true,
+            ...(plainGroupText
+              ? {
+                  cellRendererParams: {
+                    ...autoGroupColumnDef.cellRendererParams,
+                    suppressCount: true,
+                    innerRenderer: (p: { node: { group?: boolean; allChildrenCount?: number | null }; value: unknown; valueFormatted?: string | null }) => {
+                      const text = String(p.valueFormatted ?? p.value ?? "");
+                      return p.node.group ? `${text} (${p.node.allChildrenCount ?? 0})` : text;
+                    },
+                  },
+                }
+              : {}),
+          }
         : autoGroupColumnDef,
-    [phone, autoGroupColumnDef],
+    [phone, autoGroupColumnDef, plainGroupText],
   );
 
   const options: GridOptions<T> = useMemo(

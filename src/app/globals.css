@@ -530,6 +530,13 @@ a { color: inherit; text-decoration: none; }
   .tiles-2 { grid-template-columns: 1fr 1fr; }
   /* Grids: long group names wrap on a phone (GridShell sets wrapText); keep the
      wrapped lines tight, and keep ids on one line, trimmed, instead of split. */
-  [class*="ag-theme-quartz"] .ag-cell.ag-cell-wrap-text { line-height: 1.35; padding-top: 9px; padding-bottom: 9px; }
+  /* Group rows keep the normal row height (so totals beside them stay centred)
+     and centre chevron, name and count together, so "(24)" doesn't drop below
+     a wrapped name. A name only makes the row taller if it needs three lines. */
+  [class*="ag-theme-quartz"] .ag-row-group .ag-cell.ag-cell-wrap-text { line-height: 1.35; }
+  [class*="ag-theme-quartz"] .ag-row-group .ag-cell.ag-cell-wrap-text .ag-cell-wrapper {
+    min-height: calc(var(--ag-row-height) - 1px);
+    align-items: center;
+  }
   [class*="ag-theme-quartz"] .ag-cell.ag-cell-wrap-text.cell-id { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 }
