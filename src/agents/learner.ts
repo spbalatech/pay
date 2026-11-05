@@ -172,7 +172,7 @@ export async function proposeRules() {
 
   const existing = await db.rule.findMany({
     where: { status: { in: ["ACTIVE", "PROPOSED"] } },
-    select: { plainEnglish: true },
+    select: { plainEnglish: true, condition: true, action: true },
   });
 
   // Disputes are presented as D1, D2, … rather than by their 25-character
@@ -220,6 +220,17 @@ export async function proposeRules() {
       continue;
     }
 
+    // The prompt lists existing rules, but a model can still repeat one. One
+    // condition gets one rule: the same condition proposed again - whatever
+    // the wording, even with a different action - is a duplicate the merchant
+    // would only have to reject. Checked in code so it cannot depend on the
+    // model obeying.
+    const sameRule = existing.some((r) => canonical(r.condition) === canonical(proposal.condition));
+    if (sameRule) {
+      rejected.push(`"${proposal.plainEnglish.slice(0, 60)}…" duplicates an existing rule`);
+      continue;
+    }
+
     const cited = citedLabels.map((l) => byLabel.get(l.trim())!.disputeId);
     const losses = citedLabels.map((l) => byLabel.get(l.trim())!);
 
@@ -242,6 +253,8 @@ export async function proposeRules() {
       },
     });
 
+    existing.push(rule); // a second identical proposal in the same batch is a duplicate too
+
     await audit("LEARNER", "PROPOSED_RULE", "Rule", rule.id, {
       plainEnglish: rule.plainEnglish,
       citedDisputeIds: cited,
@@ -260,6 +273,21 @@ export async function proposeRules() {
         : `No pattern reached ${MIN_CLUSTER} shared disputes across ${patterns.length} resolved loss(es).`;
 
   return { proposed: created, reason };
+}
+
+/**
+ * A condition as a comparable string: keys sorted, and clause order ignored
+ * (an "all" of A and B is the same rule as an "all" of B and A).
+ */
+function canonical(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonical).sort().join(",")}]`;
+  if (value && typeof value === "object") {
+    return `{${Object.keys(value)
+      .sort()
+      .map((k) => `${JSON.stringify(k)}:${canonical((value as Record<string, unknown>)[k])}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value);
 }
 
 export async function approveRule(ruleId: string, actor: string) {

@@ -20,9 +20,22 @@ const modelFor = (tier: Tier) =>
   tier === "fast" ? env().OPENROUTER_MODEL_FAST || env().OPENROUTER_MODEL : env().OPENROUTER_MODEL;
 
 type ChatResponse = {
-  choices?: Array<{ message?: { content?: string | null } }>;
+  provider?: string;
+  choices?: Array<{ finish_reason?: string; message?: { content?: string | null } }>;
   error?: { message?: string; code?: number | string };
 };
+
+class EmptyReply extends Error {}
+
+/** One retry on an empty reply; OpenRouter often routes the retry elsewhere. */
+async function chatWithRetry(body: Record<string, unknown>): Promise<string> {
+  try {
+    return await chat(body);
+  } catch (err) {
+    if (err instanceof EmptyReply) return chat(body);
+    throw err;
+  }
+}
 
 async function chat(body: Record<string, unknown>): Promise<string> {
   const controller = new AbortController();
@@ -36,7 +49,11 @@ async function chat(body: Record<string, unknown>): Promise<string> {
         "Content-Type": "application/json",
         "X-Title": "Aegis",
       },
-      body: JSON.stringify(body),
+      // Hybrid models (DeepSeek V4) can run in "thinking" mode on some
+      // upstreams, spending the whole max_tokens on hidden reasoning and
+      // returning no text (finish "length"). These are short writing jobs;
+      // thinking stays off.
+      body: JSON.stringify({ reasoning: { enabled: false }, ...body }),
       signal: controller.signal,
     });
 
@@ -51,7 +68,16 @@ async function chat(body: Record<string, unknown>): Promise<string> {
     if (!res.ok || json.error) {
       throw new Error(`OpenRouter ${res.status}: ${json.error?.message ?? text.slice(0, 200)}`);
     }
-    return (json.choices?.[0]?.message?.content ?? "").trim();
+    const choice = json.choices?.[0];
+    const content = (choice?.message?.content ?? "").trim();
+    // Some upstreams intermittently answer 200 with no text. An empty letter
+    // must not be stored as if it were one, so it fails here and is retried.
+    if (!content) {
+      throw new EmptyReply(
+        `OpenRouter returned no text (finish ${choice?.finish_reason ?? "unknown"}, upstream ${json.provider ?? "unknown"}).`,
+      );
+    }
+    return content;
   } catch (err) {
     if (err instanceof Error && err.name === "AbortError") {
       throw new Error(`OpenRouter did not respond within ${TIMEOUT_MS / 1000}s.`);
@@ -76,7 +102,7 @@ export const openrouterProvider: AIProvider = {
   },
 
   async generate(opts: GenerateOptions) {
-    return chat({
+    return chatWithRetry({
       model: modelFor(opts.tier ?? "reasoning"),
       max_tokens: opts.maxTokens ?? 1500,
       temperature: 0.3,
@@ -91,7 +117,7 @@ export const openrouterProvider: AIProvider = {
     let lastError: unknown;
 
     for (let attempt = 0; attempt < 2; attempt++) {
-      const content = await chat({
+      const content = await chatWithRetry({
         model: modelFor(opts.tier ?? "reasoning"),
         max_tokens: opts.maxTokens ?? 2000,
         temperature: attempt === 0 ? 0.2 : 0,
