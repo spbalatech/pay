@@ -56,8 +56,7 @@ Every update gets an entry in `docs/UPDATE-LOG.md`: the problem it solves, what 
 - **Learner duplicates** are rejected in code: a proposal whose condition matches an ACTIVE/PROPOSED rule (canonicalised) is dropped, whatever its wording or action.
 - **PayPal layer** `src/lib/paypal/`: `client.ts` (token cache, idempotency keys on writes, backoff on 429/5xx), `api.ts` (typed endpoints), `transport.ts` routes five operations through either REST or PayPal's MCP server (`mcp.ts`) per `AEGIS_PAYPAL_TRANSPORT`; everything else stays on REST. MCP tool schemas differ from REST bodies (e.g. `create_invoice` flattens currency), and the hosted MCP server reports write failures as `{"ok":false}` in a 200 body, not via `isError`.
 - **Webhook receiver** `src/app/api/webhooks/paypal/route.ts` + `src/lib/paypal/webhooks.ts`: verifies the signature on the **raw body** before trusting anything, returns 200 fast and processes after, dedupes by event id (`WebhookEvent`). `AEGIS_WEBHOOK_ALLOW_UNVERIFIED` accepts only the literal strings `true`/`false` (anything else fails boot); don't change that to `z.coerce.boolean()`.
-- **Data provenance.** Every externally-derived row has a `source` of `LIVE_SANDBOX` or `SIMULATED` (`prisma/schema.prisma`); the UI badges simulated rows. Seeded disputes are fixtures because the sandbox can't originate buyer disputes; preserve this labeling.
-- **UI**: pages in `src/app/{disputes,orders,watchlist,rulebook,audit}`, tables are AG Grid (community + enterprise, v32) under `src/components/grids/`.
+- **Data provenance.** Every externally-derived row has a `source` of `LIVE_SANDBOX` or `SIMULATED` (`prisma/schema.prisma`); the UI badges simulated rows. Seeded disputes are demo fixtures (`SIMULATED`); real sandbox cases are `LIVE_SANDBOX`. Preserve this labeling.
 
 ## Safety defaults (enforced in code, keep them)
 

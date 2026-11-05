@@ -39,6 +39,14 @@ Details of each update follow, newest first. Each heading names who built it.
 
 ---
 
+## 5 Nov: AI assistant guide no longer contradicts itself (Yoghesh, `live-disputes`)
+
+**Problem:** `CLAUDE.md` said in one place that the sandbox can create buyer disputes (true, proven 5 Nov) and in another that seeded disputes exist because it can't. An AI assistant reading it could act on the wrong one.
+
+**What it adds:** one consistent rule: seeded disputes are demo data labelled `SIMULATED`, real sandbox cases are `LIVE_SANDBOX`, and the labels must be kept. Also drops a folder-listing line an assistant can see for itself. Wording only; no code changed.
+
+---
+
 ## 5 Nov: Project guide for AI assistants brought up to date (Yoghesh, `live-disputes`)
 
 **Problem:** `CLAUDE.md` (the guide an AI coding assistant reads first) still described the code before today: no live disputes, no OpenRouter, no update log, and it listed `npm run sync` and `lint` as if they worked.
