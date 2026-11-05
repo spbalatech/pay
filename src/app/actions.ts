@@ -27,10 +27,23 @@ export async function dismissWatchAction(watchId: string) {
   revalidatePath("/");
 }
 
-export async function decideDisputeAction(disputeId: string, decision: "FIGHT" | "ACCEPT") {
-  await executeDecision(disputeId, decision, OPERATOR);
+/**
+ * Returns PayPal's refusal as a message rather than throwing: a live case can
+ * be refused (wrong stage, evidence PayPal asks for that we lack), and the
+ * operator needs to read why. Next.js hides thrown messages in production.
+ */
+export async function decideDisputeAction(
+  disputeId: string,
+  decision: "FIGHT" | "ACCEPT",
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await executeDecision(disputeId, decision, OPERATOR);
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
   revalidatePath("/disputes");
   revalidatePath("/");
+  return { ok: true };
 }
 
 export async function approveRuleAction(ruleId: string) {

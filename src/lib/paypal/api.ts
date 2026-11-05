@@ -6,6 +6,7 @@ import { randomUUID } from "node:crypto";
 export type PayPalOrder = {
   id: string;
   status: string;
+  links?: Array<{ rel: string; href: string; method?: string }>;
   create_time?: string;
   update_time?: string;
   payer?: {
@@ -47,6 +48,12 @@ export function createOrder(input: {
     postalCode: string;
     countryCode: string;
   };
+  /**
+   * Where the buyer lands after approving in the browser. Set this for an
+   * order a real (sandbox) buyer will approve; the approval link is then the
+   * "payer-action" link rather than "approve".
+   */
+  returnUrl?: string;
 }) {
   const currency = input.currency ?? "USD";
   const itemTotal = input.items
@@ -97,11 +104,37 @@ export function createOrder(input: {
             : {}),
         },
       ],
+      ...(input.returnUrl
+        ? {
+            payment_source: {
+              paypal: {
+                experience_context: {
+                  return_url: input.returnUrl,
+                  cancel_url: input.returnUrl,
+                  user_action: "PAY_NOW",
+                  ...(input.shipping ? { shipping_preference: "SET_PROVIDED_ADDRESS" } : {}),
+                },
+              },
+            },
+          }
+        : {}),
     },
   });
 }
 
 export const getOrder = (id: string) => paypal<PayPalOrder>(`/v2/checkout/orders/${id}`);
+
+/**
+ * Takes the money for an order the buyer has approved in the browser.
+ * Retried on 5xx by the client, so it carries an idempotency key: a second
+ * capture of the same order must not happen.
+ */
+export const captureOrder = (id: string) =>
+  paypal<PayPalOrder>(`/v2/checkout/orders/${id}/capture`, {
+    method: "POST",
+    idempotencyKey: randomUUID(),
+    body: {},
+  });
 
 /* ----------------------------------------------------------------- refunds */
 
@@ -138,6 +171,15 @@ export type PayPalDispute = {
   dispute_life_cycle_stage?: string;
   /** What PayPal will accept right now; changes with the lifecycle stage. */
   allowed_response_options?: { allowed_response_options?: string[] };
+  /**
+   * The actions legal right now, as HATEOAS links (rel "provide_evidence",
+   * "accept_claim", "escalate", ...). The sandbox returns these reliably even
+   * when allowed_response_options is absent.
+   */
+  links?: Array<{ rel: string; href: string; method?: string }>;
+  dispute_outcome?: { outcome_code?: string };
+  /** Includes what PayPal asks the seller for (source REQUESTED_FROM_SELLER). */
+  evidences?: Array<{ evidence_type: string; source?: string; notes?: string; dispute_life_cycle_stage?: string }>;
   disputed_transactions?: Array<{
     seller_transaction_id?: string;
     buyer_transaction_id?: string;
@@ -177,6 +219,83 @@ export function acceptDisputeClaim(id: string, note: string, refundAmount?: { va
         ? { refund_amount: { value: refundAmount.value, currency_code: refundAmount.currency } }
         : {}),
     },
+  });
+}
+
+export type EvidenceSubmission = {
+  /** PROOF_OF_FULFILLMENT, PROOF_OF_REFUND, OTHER, ... per PayPal's evidence types. */
+  evidenceType: string;
+  notes: string;
+  tracking?: Array<{ carrier: string; trackingNumber: string }>;
+};
+
+/**
+ * Files the merchant's defence. PayPal takes this as multipart/form-data with
+ * the JSON in a part named "input" (files would be further parts), not as a
+ * JSON body. It is legal only while PayPal lists PROVIDE_EVIDENCE among the
+ * dispute's allowed responses, which callers check first.
+ */
+export function provideDisputeEvidence(id: string, submission: EvidenceSubmission) {
+  const input = {
+    evidences: [
+      {
+        evidence_type: submission.evidenceType,
+        notes: submission.notes,
+        ...(submission.tracking?.length
+          ? {
+              evidence_info: {
+                tracking_info: submission.tracking.map((t) => ({
+                  carrier_name: t.carrier,
+                  tracking_number: t.trackingNumber,
+                })),
+              },
+            }
+          : {}),
+      },
+    ],
+  };
+  const form = new FormData();
+  form.append("input", new Blob([JSON.stringify(input)], { type: "application/json" }), "input.json");
+
+  return paypal<{ links?: Array<{ rel: string; href: string }> }>(
+    `/v1/customer/disputes/${id}/provide-evidence`,
+    { method: "POST", form, idempotencyKey: randomUUID() },
+  );
+}
+
+/**
+ * The response PayPal takes once a case is a chargeback under its review:
+ * free-text notes (files would be further parts), multipart like evidence.
+ * Offered as the "provide_supporting_info" link instead of provide_evidence.
+ */
+export function provideDisputeSupportingInfo(id: string, notes: string) {
+  const form = new FormData();
+  form.append("input", new Blob([JSON.stringify({ notes })], { type: "application/json" }), "input.json");
+  return paypal<{ links?: Array<{ rel: string; href: string }> }>(
+    `/v1/customer/disputes/${id}/provide-supporting-info`,
+    { method: "POST", form, idempotencyKey: randomUUID() },
+  );
+}
+
+/**
+ * SANDBOX ONLY. Settles a dispute in the buyer's or seller's favour, standing
+ * in for PayPal's review so a demo can reach an outcome the same day. PayPal
+ * accepts it only once the case is under its review (a claim, not an inquiry).
+ */
+export function adjudicateSandboxDispute(id: string, outcome: "BUYER_FAVOR" | "SELLER_FAVOR") {
+  return paypal<{ links?: unknown[] }>(`/v1/customer/disputes/${id}/adjudicate`, {
+    method: "POST",
+    idempotencyKey: randomUUID(),
+    body: { adjudication_outcome: outcome },
+  });
+}
+
+/** Moves an inquiry up to a claim, so PayPal reviews it. */
+export function escalateDispute(id: string, note: string) {
+  return paypal<{ links?: unknown[] }>(`/v1/customer/disputes/${id}/escalate`, {
+    method: "POST",
+    idempotencyKey: randomUUID(),
+    body: { note },
   });
 }
 

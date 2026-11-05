@@ -103,6 +103,7 @@ export function StatusCell(p: ICellRendererParams) {
     WON: { cls: "badge-good", label: "won" },
     LOST: { cls: "badge-critical", label: "lost" },
     ACCEPTED: { cls: "badge-muted", label: "accepted" },
+    WITH_PAYPAL: { cls: "badge-warning", label: "with PayPal" },
   };
   const s = map[v] ?? { cls: "badge-muted", label: v.toLowerCase() || "closed" };
   return <Badge cls={s.cls} code={v} label={s.label} />;

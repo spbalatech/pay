@@ -6,7 +6,7 @@ import { GridShell, moneyFmt, dateFmt, pctFmt, humanCode } from "./GridShell";
 import { RecommendationBadge, SourceBadge, DueCell, StatusCell } from "./cells";
 import { Drawer } from "../Drawer";
 import { decideDisputeAction } from "@/app/actions";
-import { Archive, CalendarClock, Check, CircleDollarSign, FileText, Mail, X } from "lucide-react";
+import { Archive, CalendarClock, Check, CircleDollarSign, FileText, Mail, Send, X } from "lucide-react";
 import { Icon, BADGE_ICON } from "../icons";
 
 export type DisputeRow = {
@@ -28,6 +28,7 @@ export type DisputeRow = {
   recommendation: string | null;
   decision: string | null;
   decisionStatus: string | null;
+  executedAt: string | null;
   outcome: string | null;
   rebuttalDraft: string | null;
   evidence: Array<{ kind: string; found: boolean; detail: string; sourceRef?: string }>;
@@ -45,10 +46,18 @@ const plain = (text: string) => text.replace(/\b[A-Z]+(?:_[A-Z]+)+\b/g, (c) => h
 
 const isClosed = (d: DisputeRow) => d.decisionStatus === "EXECUTED" || d.status === "RESOLVED" || d.status === "CLOSED";
 
+/** Fought at PayPal and waiting on PayPal's decision: done here, not over. */
+const isWithPayPal = (d: DisputeRow) =>
+  d.source === "LIVE_SANDBOX" && d.decision === "FIGHT" && d.decisionStatus === "EXECUTED" && d.outcome === "PENDING";
+
 export function DisputeGrid({ rows }: { rows: DisputeRow[] }) {
   const [selected, setSelected] = useState<DisputeRow | null>(null);
   const [pending, startTransition] = useTransition();
-  const close = useCallback(() => setSelected(null), []);
+  const [error, setError] = useState<string | null>(null);
+  const close = useCallback(() => {
+    setSelected(null);
+    setError(null);
+  }, []);
 
   const columnDefs = useMemo<ColDef<DisputeRow>[]>(
     () => [
@@ -62,7 +71,7 @@ export function DisputeGrid({ rows }: { rows: DisputeRow[] }) {
         rowGroup: true,
         hide: true,
       },
-      { colId: "status", headerName: "Status", width: 125, valueGetter: (p) => (!p.data ? null : isClosed(p.data) ? (p.data.outcome ?? "CLOSED") : "OPEN"), cellRenderer: StatusCell },
+      { colId: "status", headerName: "Status", width: 125, valueGetter: (p) => (!p.data ? null : isWithPayPal(p.data) ? "WITH_PAYPAL" : isClosed(p.data) ? (p.data.outcome ?? "CLOSED") : "OPEN"), cellRenderer: StatusCell },
       { field: "payerEmail", headerName: "Payer", minWidth: 175, flex: 1 },
       { field: "amount", headerName: "Claim", width: 118, type: "numericColumn", valueFormatter: moneyFmt, aggFunc: "sum" },
       { field: "pWin", headerName: "Win chance", width: 118, type: "numericColumn", valueFormatter: pctFmt },
@@ -79,8 +88,10 @@ export function DisputeGrid({ rows }: { rows: DisputeRow[] }) {
   const decide = (decision: "FIGHT" | "ACCEPT") =>
     selected &&
     startTransition(async () => {
-      await decideDisputeAction(selected.id, decision);
-      setSelected(null);
+      setError(null);
+      const res = await decideDisputeAction(selected.id, decision);
+      if (res.ok) setSelected(null);
+      else setError(res.error);
     });
 
   const s = selected;
@@ -138,6 +149,11 @@ export function DisputeGrid({ rows }: { rows: DisputeRow[] }) {
               <span className="tile-note" style={{ alignSelf: "center" }}>
                 Nothing is sent to PayPal until you choose.
               </span>
+              {error ? (
+                <p className="detail-p" role="alert" style={{ color: "var(--critical, #b42318)", width: "100%", margin: 0 }}>
+                  PayPal did not accept this: {error}
+                </p>
+              ) : null}
             </div>
           ) : null
         }
@@ -146,7 +162,22 @@ export function DisputeGrid({ rows }: { rows: DisputeRow[] }) {
           <>
             {s.buyerNote ? <blockquote className="quote">“{s.buyerNote}”</blockquote> : null}
 
-            {closed ? (
+            {isWithPayPal(s) ? (
+              <div className="verdict verdict-fight">
+                <div className="verdict-label"><Icon as={Send} size={14} />Fought at PayPal</div>
+                <div className="verdict-main">
+                  Evidence sent to PayPal
+                  {s.executedAt
+                    ? ` on ${new Date(s.executedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}`
+                    : ""}
+                </div>
+                <p className="verdict-note">
+                  Aegis filed the evidence and a written response
+                  {s.rebuttalDraft ? " (the letter below)" : " (a summary of the evidence, since no AI model is connected)"}.
+                  PayPal decides now; the result comes back on the next agent run, and a loss goes to the Learner.
+                </p>
+              </div>
+            ) : closed ? (
               <div className="verdict verdict-closed">
                 <div className="verdict-label"><Icon as={Archive} size={14} />Closed case</div>
                 <div className="verdict-main">

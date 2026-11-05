@@ -10,7 +10,12 @@
 import { db, audit } from "@/lib/db";
 import { policy } from "@/lib/env";
 import { generate } from "@/lib/ai";
-import { acceptDisputeClaim, getDispute } from "@/lib/paypal/api";
+import {
+  acceptDisputeClaim,
+  getDispute,
+  provideDisputeEvidence,
+  provideDisputeSupportingInfo,
+} from "@/lib/paypal/api";
 import { payerTransactionHistory, type PayerHistoryResult } from "@/lib/paypal/transport";
 import {
   checklistFor,
@@ -320,6 +325,94 @@ async function draftRebuttal(dispute: Dispute, evidence: EvidenceItem[], timelin
 /* --------------------------------------------------------------- execution */
 
 /**
+ * Files the defence of a live dispute at PayPal: the shipment tracking as
+ * proof of fulfilment when we hold it, and the drafted letter as the notes.
+ * PayPal's links on the dispute say whether evidence is legal at this stage,
+ * so they are read first rather than assumed.
+ */
+async function submitDefence(disputeId: string, actor: string) {
+  const dispute = await db.dispute.findUniqueOrThrow({
+    where: { id: disputeId },
+    include: { assessment: true, order: { include: { shipments: true } } },
+  });
+
+  const live = await getDispute(dispute.paypalDisputeId);
+  const actions = (live.links ?? []).map((l) => l.rel);
+
+  const tracking = (dispute.order?.shipments ?? []).map((s) => ({
+    carrier: s.carrier,
+    trackingNumber: s.trackingNumber,
+  }));
+
+  const found = ((dispute.assessment?.evidence ?? []) as unknown as EvidenceItem[]).filter((e) => e.found);
+  const letter =
+    dispute.assessment?.rebuttalDraft ??
+    (found.length
+      ? `We contest this claim. Evidence we hold:\n` + found.map((e) => `- ${e.detail}`).join("\n")
+      : `We contest this claim.`);
+
+  // Once a case is a chargeback under PayPal's review, the seller's channel is
+  // supporting info (notes), not typed evidence. The tracking goes in the text.
+  if (!actions.includes("provide_evidence") && actions.includes("provide_supporting_info")) {
+    const trackingLines = tracking.map((t) => `${t.carrier} tracking ${t.trackingNumber}`).join("\n");
+    const notes = (trackingLines ? `${letter}\n\n${trackingLines}` : letter).slice(0, 2000);
+    await provideDisputeSupportingInfo(dispute.paypalDisputeId, notes);
+    await audit(actor, "SUBMITTED_EVIDENCE", "Dispute", dispute.id, {
+      paypalDisputeId: dispute.paypalDisputeId,
+      channel: "supporting info",
+      stage: live.dispute_life_cycle_stage,
+      trackingNumbers: tracking.map((t) => t.trackingNumber),
+      letter: dispute.assessment?.rebuttalDraft ? "drafted rebuttal" : "evidence summary",
+    });
+    return;
+  }
+
+  if (!actions.includes("provide_evidence")) {
+    throw new Error(
+      `PayPal does not currently accept evidence on ${dispute.paypalDisputeId} ` +
+        `(status ${live.status}, stage ${live.dispute_life_cycle_stage ?? "unknown"}; ` +
+        `allowed: ${actions.filter((a) => a !== "self").join(", ") || "none"}).`,
+    );
+  }
+
+  // PayPal names the evidence it will take at this stage; anything else is
+  // rejected (EVIDENCE_TYPE_IS_NOT_ALLOWED). Answer what it asks for, and say
+  // plainly when Aegis does not hold it rather than sending something else.
+  const requested = (live.evidences ?? [])
+    .filter((e) => e.source === "REQUESTED_FROM_SELLER")
+    .map((e) => e.evidence_type);
+  const evidenceType = requested.length
+    ? requested.includes("PROOF_OF_FULFILLMENT") && tracking.length
+      ? "PROOF_OF_FULFILLMENT"
+      : requested.includes("OTHER")
+        ? "OTHER"
+        : null
+    : tracking.length
+      ? "PROOF_OF_FULFILLMENT"
+      : "OTHER";
+  if (!evidenceType) {
+    throw new Error(
+      `PayPal is asking for ${requested.join(", ")} on ${dispute.paypalDisputeId}, which Aegis does not hold ` +
+        `for this case${tracking.length ? "" : " (no shipment tracking is recorded for its order)"}. ` +
+        `Nothing was sent; consider accepting instead.`,
+    );
+  }
+
+  await provideDisputeEvidence(dispute.paypalDisputeId, {
+    evidenceType,
+    notes: letter.slice(0, 2000), // PayPal's limit on notes
+    tracking,
+  });
+
+  await audit(actor, "SUBMITTED_EVIDENCE", "Dispute", dispute.id, {
+    paypalDisputeId: dispute.paypalDisputeId,
+    evidenceType,
+    trackingNumbers: tracking.map((t) => t.trackingNumber),
+    letter: dispute.assessment?.rebuttalDraft ? "drafted rebuttal" : "evidence summary",
+  });
+}
+
+/**
  * Carries out the decision. Only auto-executes an ACCEPT under the merchant's
  * ceiling; a FIGHT always needs a human, because the rebuttal goes out in the
  * merchant's name.
@@ -366,6 +459,13 @@ export async function executeDecision(
       },
     });
   } else {
+    // A live case is fought at PayPal, not just recorded here: the evidence
+    // and the drafted letter are filed through provide-evidence. If PayPal
+    // refuses, this throws and the decision is not marked executed.
+    if (dispute.source === "LIVE_SANDBOX") {
+      await submitDefence(dispute.id, actor);
+    }
+
     await db.disputeAssessment.update({
       where: { disputeId: dispute.id },
       data: {

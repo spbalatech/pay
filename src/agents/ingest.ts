@@ -9,6 +9,7 @@
 import { db, audit } from "@/lib/db";
 import { getDispute } from "@/lib/paypal/api";
 import { assessDispute } from "./advocate";
+import { normalizeReason } from "./ev";
 
 type Envelope = {
   id: string;
@@ -84,7 +85,7 @@ async function disputeCreated(event: Envelope): Promise<string> {
     data: {
       paypalDisputeId: disputeId,
       orderId: order?.id ?? null,
-      reasonCode: full?.reason ?? "OTHER",
+      reasonCode: normalizeReason(full?.reason),
       status: full?.status ?? "OPEN",
       lifeCycleStage: full?.dispute_life_cycle_stage ?? null,
       amount: Number(full?.dispute_amount?.value ?? 0),
@@ -139,29 +140,37 @@ async function disputeChanged(event: Envelope): Promise<string> {
     },
   });
 
-  // The outcome is what the Learner trains on, so it is recorded the moment
-  // PayPal reports it rather than inferred later.
-  const code = resource?.dispute_outcome?.outcome_code;
-  if (code && dispute.assessment) {
-    const outcome =
-      code === "RESOLVED_SELLER_FAVOUR" || code === "RESOLVED_SELLER_FAVOR"
-        ? "WON"
-        : code === "RESOLVED_BUYER_FAVOUR" || code === "RESOLVED_BUYER_FAVOR"
-          ? "LOST"
-          : dispute.assessment.decision === "ACCEPT"
-            ? "ACCEPTED"
-            : null;
-
-    if (outcome) {
-      await db.disputeAssessment.update({
-        where: { disputeId: dispute.id },
-        data: { outcome, outcomeAt: new Date() },
-      });
-      await audit("WEBHOOK", `DISPUTE_${outcome}`, "Dispute", dispute.id, { code });
-    }
-  }
+  await recordDisputeOutcome(dispute.id, resource?.dispute_outcome?.outcome_code, "WEBHOOK");
 
   return `dispute ${disputeId} updated`;
+}
+
+/**
+ * The outcome is what the Learner trains on, so it is recorded the moment
+ * PayPal reports it rather than inferred later. Shared by the webhook path
+ * and the sync, so a result is learned from whichever sees it first.
+ */
+export async function recordDisputeOutcome(disputeId: string, code: string | undefined, actor: string) {
+  if (!code) return null;
+  const assessment = await db.disputeAssessment.findUnique({ where: { disputeId } });
+  if (!assessment || assessment.outcome !== "PENDING") return null;
+
+  const outcome =
+    code === "RESOLVED_SELLER_FAVOUR" || code === "RESOLVED_SELLER_FAVOR"
+      ? "WON"
+      : code === "RESOLVED_BUYER_FAVOUR" || code === "RESOLVED_BUYER_FAVOR"
+        ? "LOST"
+        : assessment.decision === "ACCEPT"
+          ? "ACCEPTED"
+          : null;
+  if (!outcome) return null;
+
+  await db.disputeAssessment.update({
+    where: { disputeId },
+    data: { outcome, outcomeAt: new Date() },
+  });
+  await audit(actor, `DISPUTE_${outcome}`, "Dispute", disputeId, { code });
+  return outcome;
 }
 
 /* ------------------------------------------------------------- payments */

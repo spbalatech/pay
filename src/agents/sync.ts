@@ -14,6 +14,8 @@
 import { db, audit } from "@/lib/db";
 import { listDisputes, getDispute, type Transport } from "@/lib/paypal/transport";
 import { assessDispute } from "./advocate";
+import { recordDisputeOutcome } from "./ingest";
+import { normalizeReason } from "./ev";
 
 export type SyncResult = {
   seen: number;
@@ -50,6 +52,10 @@ export async function syncDisputes(opts: { transport?: Transport; pageSize?: num
         });
         updated.push(id);
       }
+      // Without this, a result only arrived by webhook; a missed delivery
+      // meant the Learner never saw the loss.
+      const outcome = await recordDisputeOutcome(known.id, d.dispute_outcome?.outcome_code, "SYNC");
+      if (outcome && !updated.includes(id)) updated.push(id);
       continue;
     }
 
@@ -60,7 +66,7 @@ export async function syncDisputes(opts: { transport?: Transport; pageSize?: num
       data: {
         paypalDisputeId: id,
         orderId: order?.id ?? null,
-        reasonCode: d.reason ?? "OTHER",
+        reasonCode: normalizeReason(d.reason),
         status: d.status ?? "OPEN",
         lifeCycleStage: d.dispute_life_cycle_stage ?? null,
         amount: Number(d.dispute_amount?.value ?? 0),
@@ -86,6 +92,7 @@ export async function syncDisputes(opts: { transport?: Transport; pageSize?: num
     });
 
     await assessDispute(created.id);
+    await recordDisputeOutcome(created.id, d.dispute_outcome?.outcome_code, "SYNC");
     ingested.push(id);
   }
 

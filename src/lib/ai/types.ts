@@ -3,7 +3,7 @@ import type { z } from "zod";
 /** Which model tier a call wants. Providers map these to their own models. */
 export type Tier = "reasoning" | "fast";
 
-export type ProviderName = "anthropic" | "ollama" | "none";
+export type ProviderName = "anthropic" | "openrouter" | "ollama" | "none";
 
 export type GenerateOptions = {
   system: string;
@@ -33,7 +33,7 @@ export interface AIProvider {
 export class NoProviderError extends Error {
   constructor() {
     super(
-      "No AI provider is available. Set ANTHROPIC_API_KEY, or run a local model " +
+      "No AI provider is available. Set ANTHROPIC_API_KEY or OPENROUTER_API_KEY, or run a local model " +
         "with Ollama and set AEGIS_AI_PROVIDER=ollama. Run `npm run ai:check` to diagnose.",
     );
     this.name = "NoProviderError";

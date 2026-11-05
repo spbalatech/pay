@@ -30,6 +30,7 @@ export default async function DisputesPage() {
     recommendation: d.assessment?.recommendation ?? null,
     decision: d.assessment?.decision ?? null,
     decisionStatus: d.assessment?.decisionStatus ?? null,
+    executedAt: d.assessment?.executedAt?.toISOString() ?? null,
     outcome: d.assessment?.outcome ?? null,
     rebuttalDraft: d.assessment?.rebuttalDraft ?? null,
     evidence: (d.assessment?.evidence as DisputeRow["evidence"]) ?? [],

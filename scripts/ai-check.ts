@@ -8,6 +8,7 @@ import { env } from "../src/lib/env";
 import { aiStatus, resolveProvider, generate } from "../src/lib/ai";
 import { anthropicProvider } from "../src/lib/ai/anthropic";
 import { ollamaProvider } from "../src/lib/ai/ollama";
+import { openrouterProvider } from "../src/lib/ai/openrouter";
 
 async function main() {
   const e = env();
@@ -15,6 +16,12 @@ async function main() {
 
   const anthropicOk = await anthropicProvider.available();
   console.log(`anthropic  ${anthropicOk ? "key set" : "no key"} · ${e.AEGIS_MODEL_REASONING} / ${e.AEGIS_MODEL_FAST}`);
+
+  const openrouterOk = await openrouterProvider.available();
+  console.log(
+    `openrouter ${openrouterOk ? "key set" : "no key"} · ${e.OPENROUTER_MODEL}` +
+      (e.OPENROUTER_MODEL_FAST ? ` / ${e.OPENROUTER_MODEL_FAST}` : ""),
+  );
 
   const ollamaOk = await ollamaProvider.available();
   console.log(`ollama     ${ollamaOk ? "reachable" : "not reachable"} at ${e.OLLAMA_BASE_URL} · ${e.OLLAMA_MODEL}`);

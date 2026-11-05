@@ -86,6 +86,11 @@ function parseErrorBody(body: string): { debugId?: string; issue?: string } {
 export type RequestOptions = {
   method?: "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
   body?: unknown;
+  /**
+   * Multipart body, for the few endpoints that take files (dispute evidence).
+   * Sent as-is so fetch sets the multipart boundary; `body` is ignored.
+   */
+  form?: FormData;
   query?: Record<string, string | number | undefined>;
   /** PayPal requires this on order/refund creation to make retries safe. */
   idempotencyKey?: string;
@@ -98,7 +103,7 @@ export type RequestOptions = {
  * record a failure rather than silently skipping a step.
  */
 export async function paypal<T>(path: string, opts: RequestOptions = {}): Promise<T> {
-  const { method = "GET", body, query, idempotencyKey, headers = {} } = opts;
+  const { method = "GET", body, form, query, idempotencyKey, headers = {} } = opts;
 
   const url = new URL(`${host()}${path}`);
   for (const [k, v] of Object.entries(query ?? {})) {
@@ -112,11 +117,11 @@ export async function paypal<T>(path: string, opts: RequestOptions = {}): Promis
       method,
       headers: {
         Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
+        ...(form ? {} : { "Content-Type": "application/json" }),
         ...(idempotencyKey ? { "PayPal-Request-Id": idempotencyKey } : {}),
         ...headers,
       },
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body: form ?? (body === undefined ? undefined : JSON.stringify(body)),
     });
 
     if (res.status === 204) return undefined as T;

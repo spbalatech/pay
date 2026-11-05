@@ -33,13 +33,17 @@ const schema = z.object({
   // over SSE, or @paypal/mcp launched locally over stdio. Same tools either way.
   AEGIS_PAYPAL_MCP_MODE: z.enum(["remote", "local"]).default("local"),
   AEGIS_PAYPAL_MCP_SSE_URL: z.string().default("https://mcp.sandbox.paypal.com/sse"),
-  // Which model provider to use. "auto" prefers Anthropic when a key is set
-  // and falls back to a local Ollama server when one is running.
-  AEGIS_AI_PROVIDER: z.enum(["auto", "anthropic", "ollama", "none"]).default("auto"),
+  // Which model provider to use. "auto" prefers Anthropic when a key is set,
+  // then OpenRouter when its key is set, then a local Ollama server.
+  AEGIS_AI_PROVIDER: z.enum(["auto", "anthropic", "openrouter", "ollama", "none"]).default("auto"),
 
   ANTHROPIC_API_KEY: optionalStr(),
   AEGIS_MODEL_REASONING: z.string().default("claude-opus-5"),
   AEGIS_MODEL_FAST: z.string().default("claude-haiku-5-5"),
+
+  OPENROUTER_API_KEY: optionalStr(),
+  OPENROUTER_MODEL: z.string().default("deepseek/deepseek-v4-flash"),
+  OPENROUTER_MODEL_FAST: optionalStr(),
 
   OLLAMA_BASE_URL: z.string().default("http://localhost:11434"),
   OLLAMA_MODEL: z.string().default("llama3.1:8b"),
@@ -109,7 +113,10 @@ export function capabilities(): Capabilities {
   const e = env();
   const paypal = isRealSecret(e.PAYPAL_CLIENT_ID) && isRealSecret(e.PAYPAL_CLIENT_SECRET);
   const aiConfigured =
-    isRealSecret(e.ANTHROPIC_API_KEY) || e.AEGIS_AI_PROVIDER === "ollama" || e.AEGIS_AI_PROVIDER === "auto";
+    isRealSecret(e.ANTHROPIC_API_KEY) ||
+    isRealSecret(e.OPENROUTER_API_KEY) ||
+    e.AEGIS_AI_PROVIDER === "ollama" ||
+    e.AEGIS_AI_PROVIDER === "auto";
 
   const missing: string[] = [];
   if (!paypal) missing.push("PAYPAL_CLIENT_ID / PAYPAL_CLIENT_SECRET");

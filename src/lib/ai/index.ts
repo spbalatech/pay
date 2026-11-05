@@ -1,6 +1,7 @@
 import { env } from "@/lib/env";
 import { anthropicProvider } from "./anthropic";
 import { ollamaProvider } from "./ollama";
+import { openrouterProvider } from "./openrouter";
 import { NoProviderError, type AIProvider, type GenerateOptions, type ProviderName, type StructuredOptions } from "./types";
 import type { z } from "zod";
 
@@ -26,10 +27,13 @@ export async function resolveProvider(force = false): Promise<AIProvider | null>
 
   if (choice === "anthropic") {
     provider = (await anthropicProvider.available()) ? anthropicProvider : null;
+  } else if (choice === "openrouter") {
+    provider = (await openrouterProvider.available()) ? openrouterProvider : null;
   } else if (choice === "ollama") {
     provider = (await ollamaProvider.available()) ? ollamaProvider : null;
   } else if (choice === "auto") {
     if (await anthropicProvider.available()) provider = anthropicProvider;
+    else if (await openrouterProvider.available()) provider = openrouterProvider;
     else if (await ollamaProvider.available()) provider = ollamaProvider;
   }
 
@@ -64,7 +68,9 @@ export async function aiStatus(): Promise<AIStatus> {
           ? `No Ollama server at ${env().OLLAMA_BASE_URL}. Start it with \`ollama serve\` and pull a model.`
           : choice === "anthropic"
             ? "ANTHROPIC_API_KEY is not set."
-            : "Set ANTHROPIC_API_KEY, or run Ollama locally and set AEGIS_AI_PROVIDER=ollama.",
+            : choice === "openrouter"
+              ? "OPENROUTER_API_KEY is not set."
+              : "Set ANTHROPIC_API_KEY or OPENROUTER_API_KEY, or run Ollama locally and set AEGIS_AI_PROVIDER=ollama.",
     };
   }
   const d = p.describe();

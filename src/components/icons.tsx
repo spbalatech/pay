@@ -78,6 +78,7 @@ export const BADGE_ICON: Record<string, LucideIcon> = {
   WON: Trophy,
   LOST: CircleX,
   ACCEPTED: Undo2,
+  WITH_PAYPAL: Hourglass,
   OVERDUE: AlarmClock,
   DUE_SOON: Hourglass,
 };

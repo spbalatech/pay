@@ -19,6 +19,7 @@
     "paypal:check": "tsx scripts/paypal-check.ts",
     "webhook": "tsx scripts/webhook.ts",
     "mcp:check": "tsx scripts/mcp-check.ts",
+    "live": "tsx scripts/live-dispute.ts",
     "sync": "tsx -e \"import('dotenv/config').then(()=>import('./src/agents/sync')).then(async m=>{console.log(await m.syncDisputes());process.exit(0)})\""
   },
   "dependencies": {

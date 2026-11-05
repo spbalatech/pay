@@ -76,6 +76,22 @@ export const EVIDENCE_CHECKLIST: Record<string, Array<{ kind: string; weight: nu
   ],
 };
 
+/**
+ * PayPal's Disputes API names two reasons differently from the short codes
+ * used everywhere in Aegis (checklists, win rates, the Learner's grouping).
+ * Live cases are stored under the short code so they pool with the history
+ * instead of forming a separate bucket of one.
+ */
+const PAYPAL_REASON_ALIASES: Record<string, string> = {
+  MERCHANDISE_OR_SERVICE_NOT_RECEIVED: "ITEM_NOT_RECEIVED",
+  MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED: "SIGNIFICANTLY_NOT_AS_DESCRIBED",
+};
+
+export function normalizeReason(reason: string | undefined | null): string {
+  if (!reason) return "OTHER";
+  return PAYPAL_REASON_ALIASES[reason] ?? reason;
+}
+
 export function checklistFor(reasonCode: string) {
   return EVIDENCE_CHECKLIST[reasonCode] ?? EVIDENCE_CHECKLIST.ITEM_NOT_RECEIVED;
 }
