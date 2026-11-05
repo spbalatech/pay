@@ -39,6 +39,14 @@ Details of each update follow, newest first. Each heading names who built it.
 
 ---
 
+## 5 Nov: Project guide for AI assistants brought up to date (Yoghesh, `live-disputes`)
+
+**Problem:** `CLAUDE.md` (the guide an AI coding assistant reads first) still described the code before today: no live disputes, no OpenRouter, no update log, and it listed `npm run sync` and `lint` as if they worked.
+
+**What it adds:** the `npm run live` commands and the live-dispute flow with its sandbox gotchas (US shop needed, chargeback stage, links instead of allowed options, the 9-hour token quirk); the three AI options and the empty-reply fix; the update-log rule; honest notes that `npm run sync` is broken and lint is not set up; the Render handoff now names the PayPal and AI keys to set and the merge order.
+
+---
+
 ## 5 Nov: OpenRouter as a third AI option (Yoghesh, `live-disputes`)
 
 **Problem:** Aegis could only use Claude (paid, no key yet) or a local model (needs a strong laptop). Without either, the response letters and the Learner, which is the moment the loop closes, stayed switched off, so they couldn't be tested cheaply.

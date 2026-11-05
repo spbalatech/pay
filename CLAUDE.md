@@ -22,11 +22,28 @@ npm run build                   # NOTE: also runs prisma generate + migrate depl
 npm run ai:check                # which model provider is live + a round trip
 npm run paypal:check            # exercise every PayPal endpoint Aegis uses
 npm run mcp:check               # PayPal MCP transport (AEGIS_PAYPAL_MCP_MODE=remote for hosted)
-npm run sync                    # reconcile disputes with PayPal only
+npm run sync                    # reconcile disputes with PayPal only (BROKEN: "syncDisputes is not a function"; agents:run does the same sync)
 npm run webhook -- register|list|simulate|delete ...
+
+npm run live -- order [orderId] # real sandbox order: buyer approves in browser -> captured, saved LIVE_SANDBOX, USPS tracker; orderId resumes a late approval
+npm run live -- status|escalate|settle <disputeId> [buyer|seller]   # read a live case / inquiry -> claim / sandbox adjudicate
 ```
 
-There is no test suite; verification is `typecheck`, `lint`, the `*:check` scripts, and `agents:run` against seeded data. Scripts run via `tsx` and load `.env` through `dotenv/config`.
+There is no test suite; verification is `typecheck`, the `*:check` scripts, and `agents:run` against seeded data. `npm run lint` is not set up (it opens an interactive ESLint prompt). Scripts run via `tsx` and load `.env` through `dotenv/config`. Postgres needs Docker Desktop running first.
+
+## Live disputes in the sandbox
+
+The sandbox *can* originate buyer disputes: a sandbox personal account opens a case at sandbox.paypal.com on a payment it made (`npm run live -- order` makes one). Flow: order -> buyer opens case -> `agents:run` (sync ingests, matches the order by capture id, Advocate assesses) -> [inquiry only: `escalate` before responding] -> Fight in the console -> `settle` if PayPal shows an `adjudicate` link -> `agents:run` records the outcome.
+
+- The sandbox business account must be **US** (an India one fails with `UNSUPPORTED_PAYEE_CURRENCY`); the India test buyer pays by linked card and its cases go straight to **CHARGEBACK** stage.
+- Legal actions come from the dispute's HATEOAS `links` (`provide_evidence`, `provide_supporting_info`, `escalate`, `adjudicate`, ...), not `allowed_response_options` (absent in sandbox). `submitDefence` in `advocate.ts` answers the evidence types PayPal requests (`REQUESTED_FROM_SELLER`), uses `provide-supporting-info` at chargeback stage, and throws (nothing sent, decision not executed) when it can't comply. Both endpoints are multipart (`form` option in `client.ts`).
+- PayPal's reason names are normalised (`normalizeReason` in `ev.ts`, e.g. `MERCHANDISE_OR_SERVICE_NOT_RECEIVED` -> `ITEM_NOT_RECEIVED`) so live cases pool with history.
+- Outcomes are recorded by `recordDisputeOutcome` (`ingest.ts`), shared by the webhook path and the sync.
+- After enabling a feature on a PayPal app, the client-credentials token keeps its old scopes for up to 9 h; terminate it (`POST /v1/oauth2/token/terminate`) to get a fresh one.
+
+## Update log
+
+Every update gets an entry in `docs/UPDATE-LOG.md`: the problem it solves, what it adds, what was and was not tested, and who built it (Balaji: foundation on `main`; Yoghesh: updates on top). Commit it with the change. The repo is public: no keys in it.
 
 ## Architecture
 
@@ -35,7 +52,8 @@ There is no test suite; verification is `typecheck`, `lint`, the `*:check` scrip
 - **Agents** live in `src/agents/*.ts`, each exporting a `run*` function plus execute/approve functions. Every agent upserts, so passes are re-runnable. Entry points: `scripts/run-agents.ts` (CLI), `src/app/actions.ts` (server actions for the UI; human actions are attributed as `human:operator`), and `src/agents/ingest.ts` (webhook events → domain handlers). `src/agents/sync.ts` reconciles disputes from PayPal.
 - **Audit log is the source of truth for "what happened".** `src/lib/activity.ts` builds the console's activity feed from `AuditLog`; agent actions must be recorded there.
 - **Graceful degradation is a design requirement.** `src/lib/env.ts` (zod) makes all credentials optional; only `DATABASE_URL` is required. Missing PayPal creds disable live writes; missing model disables only the Learner and drafted text (Sentinel/Interceptor/Advocate still work fully). Empty `.env` values are treated as unset.
-- **AI provider layer** `src/lib/ai/`: one interface (`types.ts`), Anthropic and Ollama implementations, selected in `index.ts` by `AEGIS_AI_PROVIDER` (`auto|anthropic|ollama|none`, 30s cached). Structured output uses a forced tool call (Anthropic) or JSON-schema-constrained `format` (Ollama). Import from `@/lib/ai`; `claude.ts` is a deprecated re-export.
+- **AI provider layer** `src/lib/ai/`: one interface (`types.ts`), Anthropic, OpenRouter and Ollama implementations, selected in `index.ts` by `AEGIS_AI_PROVIDER` (`auto|anthropic|openrouter|ollama|none`, 30s cached; `auto` = Anthropic, then OpenRouter, then Ollama). Structured output uses a forced tool call (Anthropic), a `json_schema` response with `require_parameters` (OpenRouter), or JSON-schema-constrained `format` (Ollama). OpenRouter defaults to `deepseek/deepseek-v4-flash` with `reasoning: { enabled: false }`: some upstreams otherwise spend `max_tokens` on hidden reasoning and return empty text, which is treated as an error and retried once. The default Claude model id `claude-opus-5` is unverified; check it before relying on Anthropic. Import from `@/lib/ai`; `claude.ts` is a deprecated re-export.
+- **Learner duplicates** are rejected in code: a proposal whose condition matches an ACTIVE/PROPOSED rule (canonicalised) is dropped, whatever its wording or action.
 - **PayPal layer** `src/lib/paypal/`: `client.ts` (token cache, idempotency keys on writes, backoff on 429/5xx), `api.ts` (typed endpoints), `transport.ts` routes five operations through either REST or PayPal's MCP server (`mcp.ts`) per `AEGIS_PAYPAL_TRANSPORT`; everything else stays on REST. MCP tool schemas differ from REST bodies (e.g. `create_invoice` flattens currency), and the hosted MCP server reports write failures as `{"ok":false}` in a 200 body, not via `isError`.
 - **Webhook receiver** `src/app/api/webhooks/paypal/route.ts` + `src/lib/paypal/webhooks.ts`: verifies the signature on the **raw body** before trusting anything, returns 200 fast and processes after, dedupes by event id (`WebhookEvent`). `AEGIS_WEBHOOK_ALLOW_UNVERIFIED` accepts only the literal strings `true`/`false` (anything else fails boot); don't change that to `z.coerce.boolean()`.
 - **Data provenance.** Every externally-derived row has a `source` of `LIVE_SANDBOX` or `SIMULATED` (`prisma/schema.prisma`); the UI badges simulated rows. Seeded disputes are fixtures because the sandbox can't originate buyer disputes; preserve this labeling.
@@ -52,9 +70,9 @@ There is no test suite; verification is `typecheck`, `lint`, the `*:check` scrip
 
 ## Handoff: after the `ui-polish` branch is merged into `main`
 
-`ui-polish` (UI redesign, phone layout for the grids, Render blueprint) was written by a teammate; the next step for the hackathon is a hosted demo on Render. When you are working on `main` after that merge:
+`ui-polish` (UI redesign, phone layout for the grids, Render blueprint) was written by a teammate; `live-disputes` builds on it and is merged second. The next step for the hackathon is a hosted demo on Render. When you are working on `main` after those merges:
 
 1. **Check the merge first.** Confirm there are no leftover conflict markers, then run `npm run typecheck` and `npx prisma generate && npx next build` (the same build Render runs; unlike `npm run build`, it does not touch the database). Report anything that fails before going further.
 2. **Then suggest deploying to Render, and ask before doing anything.** Explain what a deploy does (creates a free Postgres database and web service from `render.yaml`, seeds demo data on first boot) and ask the person you are working with whether they want to deploy now. Take no deploy step (Render dashboard, Render CLI/API, a deploy-triggering push) without their explicit yes.
-3. **Secrets are set by a human in Render's Environment tab, never in `render.yaml` or any committed file.** Remind them that without `ANTHROPIC_API_KEY` there the Learner proposes no rules, so the Rulebook in the demo stays empty. That rule is the moment the loop closes, so it matters for judging.
+3. **Secrets are set by a human in Render's Environment tab, never in `render.yaml` or any committed file.** That includes the US sandbox app's `PAYPAL_CLIENT_ID`/`PAYPAL_CLIENT_SECRET` and an AI key (`ANTHROPIC_API_KEY` or `OPENROUTER_API_KEY`). Remind them that without an AI key the Learner proposes no rules, so the Rulebook in the demo stays empty. That rule is the moment the loop closes, so it matters for judging.
 4. Once this handoff is done, remove this section.
