@@ -39,6 +39,16 @@ Details of each update follow, newest first. Each heading names who built it.
 
 ---
 
+## 11 Nov: Coolify could not reach the hosted app (Balaji, `main`)
+
+**Problem:** on Coolify the app booted, seeded and served requests, but the site answered 503. Coolify's health check runs `curl` or `wget` inside the container, the slim image had neither, so the container counted as unhealthy and Coolify's proxy stopped routing to it (and never requested an HTTPS certificate).
+
+**What it adds:** `curl` and `wget` in the image. Nothing else changes.
+
+**Tested 11 Nov:** the image builds and the tools run in it. **Not tested:** the redeploy on Coolify.
+
+---
+
 ## 11 Nov: Ollama's cloud as an AI option (Balaji, `main`)
 
 **Problem:** the Ollama option only worked with a local server. A hosted copy (Coolify on a small VPS) has no GPU to run a model, and Ollama's own cloud needs an API key that Aegis never sent.

@@ -9,8 +9,9 @@
 # keep whatever is already there.
 
 FROM node:22-bookworm-slim AS base
-# Prisma's query engine needs OpenSSL.
-RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates \
+# Prisma's query engine needs OpenSSL. curl and wget are for health checks run
+# from outside the image (Coolify's health check calls one of them).
+RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates curl wget \
   && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
