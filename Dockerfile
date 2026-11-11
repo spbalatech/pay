@@ -37,6 +37,6 @@ ENV NODE_ENV=production PORT=3000 HOSTNAME=0.0.0.0
 COPY --from=build --chown=node:node /app ./
 USER node
 EXPOSE 3000
-HEALTHCHECK --interval=30s --timeout=10s --start-period=600s --retries=3 \
+HEALTHCHECK --interval=10s --timeout=5s --start-period=600s --start-interval=5s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/api/webhooks/paypal').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"
 CMD ["sh", "-c", "npx prisma migrate deploy && npm run demo:boot && exec npx next start -H 0.0.0.0 -p ${PORT}"]
