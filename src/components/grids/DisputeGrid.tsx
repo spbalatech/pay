@@ -31,6 +31,8 @@ export type DisputeRow = {
   executedAt: string | null;
   outcome: string | null;
   rebuttalDraft: string | null;
+  /** What the filing at PayPal carried, from the audit log: "drafted rebuttal" or "evidence summary". */
+  filedLetter: string | null;
   evidence: Array<{ kind: string; found: boolean; detail: string; sourceRef?: string }>;
   timeline: Array<{ at: string; what: string; source: string }>;
 };
@@ -172,8 +174,11 @@ export function DisputeGrid({ rows }: { rows: DisputeRow[] }) {
                     : ""}
                 </div>
                 <p className="verdict-note">
-                  Aegis filed the evidence and a written response
-                  {s.rebuttalDraft ? " (the letter below)" : " (a summary of the evidence, since no AI model is connected)"}.
+                  {s.filedLetter === "drafted rebuttal"
+                    ? "Aegis filed the evidence with a drafted response letter."
+                    : s.filedLetter === "evidence summary"
+                      ? "Aegis filed a summary of the evidence and the tracking, without a drafted letter."
+                      : "Aegis filed the evidence."}{" "}
                   PayPal decides now; the result comes back on the next agent run, and a loss goes to the Learner.
                 </p>
               </div>

@@ -11,6 +11,16 @@ export default async function DisputesPage() {
     take: 500,
   });
 
+  // What was actually sent to PayPal is in the audit log. The current draft is
+  // not evidence of it: the Advocate re-drafts open cases on every run.
+  const filings = await db.auditLog.findMany({
+    where: { action: "SUBMITTED_EVIDENCE", targetType: "Dispute", targetId: { in: disputes.map((d) => d.id) } },
+    orderBy: { at: "asc" },
+  });
+  const filedLetter = new Map(
+    filings.map((f) => [f.targetId, ((f.payload ?? {}) as { letter?: string }).letter ?? null]),
+  );
+
   const rows: DisputeRow[] = disputes.map((d) => ({
     id: d.id,
     paypalDisputeId: d.paypalDisputeId,
@@ -33,6 +43,7 @@ export default async function DisputesPage() {
     executedAt: d.assessment?.executedAt?.toISOString() ?? null,
     outcome: d.assessment?.outcome ?? null,
     rebuttalDraft: d.assessment?.rebuttalDraft ?? null,
+    filedLetter: filedLetter.get(d.id) ?? null,
     evidence: (d.assessment?.evidence as DisputeRow["evidence"]) ?? [],
     timeline: (d.assessment?.timeline as DisputeRow["timeline"]) ?? [],
   }));

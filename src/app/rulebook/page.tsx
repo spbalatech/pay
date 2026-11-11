@@ -37,7 +37,7 @@ export default async function RulebookPage() {
         <p className="page-sub">
           Learner reads resolved disputes, finds the shapes that keep costing you money, and writes a
           prevention rule for you to approve. It can only compose conditions from a fixed predicate
-          set, and every proposal must cite at least three real disputes it would have prevented —
+          set, and every proposal must cite at least three recorded disputes it would have prevented —
           so an approved rule can never do something you did not sanction. Approved rules are
           enforced by Sentinel on new orders.
         </p>

@@ -39,7 +39,7 @@ export function RuleCard({ rule }: { rule: SerializedRule }) {
             <div className="kv">
               <dt>Derived from</dt>
               <dd>
-                {cited} real dispute{cited === 1 ? "" : "s"}
+                {cited} cited dispute{cited === 1 ? "" : "s"}
               </dd>
             </div>
             <div className="kv">

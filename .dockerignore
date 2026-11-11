@@ -1,0 +1,15 @@
+# Never in the image: secrets, local builds, video work, database dumps.
+.env
+.env.*
+!.env.example
+node_modules
+.next
+.git
+video
+docs/demo-video-prompt.md
+*.dump
+*.log
+.DS_Store
+.mcp-auth
+coverage
+tsconfig.tsbuildinfo
