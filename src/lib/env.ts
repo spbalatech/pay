@@ -48,6 +48,8 @@ const schema = z.object({
   OLLAMA_BASE_URL: z.string().default("http://localhost:11434"),
   OLLAMA_MODEL: z.string().default("llama3.1:8b"),
   OLLAMA_MODEL_FAST: optionalStr(),
+  // Only for Ollama's hosted models (OLLAMA_BASE_URL=https://ollama.com); a local server needs none.
+  OLLAMA_API_KEY: optionalStr(),
   AEGIS_OLLAMA_TIMEOUT_MS: z.coerce.number().default(120_000),
   DATABASE_URL: z.string().min(1),
 

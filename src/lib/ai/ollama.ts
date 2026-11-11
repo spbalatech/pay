@@ -3,7 +3,8 @@ import type { AIProvider, GenerateOptions, StructuredOptions, Tier } from "./typ
 import type { z } from "zod";
 
 /**
- * Local models via Ollama.
+ * Models via Ollama: a local server, or Ollama's cloud (OLLAMA_BASE_URL=https://ollama.com
+ * plus OLLAMA_API_KEY), which speaks the same API.
  *
  * Aegis is deliberately usable with no API key and no network: the three
  * scoring agents never needed a model, and the two jobs that do — drafting
@@ -17,6 +18,11 @@ const baseUrl = () => env().OLLAMA_BASE_URL.replace(/\/$/, "");
 const modelFor = (tier: Tier) =>
   tier === "fast" ? env().OLLAMA_MODEL_FAST || env().OLLAMA_MODEL : env().OLLAMA_MODEL;
 
+const headers = (): Record<string, string> => {
+  const key = env().OLLAMA_API_KEY;
+  return key ? { Authorization: `Bearer ${key}` } : {};
+};
+
 type ChatResponse = { message?: { content?: string }; error?: string };
 
 async function chat(body: Record<string, unknown>, timeoutMs: number): Promise<string> {
@@ -26,7 +32,7 @@ async function chat(body: Record<string, unknown>, timeoutMs: number): Promise<s
   try {
     const res = await fetch(`${baseUrl()}/api/chat`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...headers() },
       body: JSON.stringify({ stream: false, ...body }),
       signal: controller.signal,
     });
@@ -64,7 +70,7 @@ export const ollamaProvider: AIProvider = {
     try {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 1500);
-      const res = await fetch(`${baseUrl()}/api/tags`, { signal: controller.signal });
+      const res = await fetch(`${baseUrl()}/api/tags`, { headers: headers(), signal: controller.signal });
       clearTimeout(timer);
       return res.ok;
     } catch {

@@ -39,6 +39,16 @@ Details of each update follow, newest first. Each heading names who built it.
 
 ---
 
+## 11 Nov: Ollama's cloud as an AI option (Balaji, `main`)
+
+**Problem:** the Ollama option only worked with a local server. A hosted copy (Coolify on a small VPS) has no GPU to run a model, and Ollama's own cloud needs an API key that Aegis never sent.
+
+**What it adds:** an optional `OLLAMA_API_KEY`. When set, Aegis sends it as a bearer token, so `OLLAMA_BASE_URL=https://ollama.com` with a cloud model (e.g. `deepseek-v4.1-flash`) works through the same Ollama code path. A local Ollama needs no key and behaves as before. `.env.example` and the README describe the option.
+
+**Tested 11 Nov:** `npm run typecheck` passes; `npm run ai:check` against the local Ollama still does a round trip. **Not tested:** a call to Ollama's cloud (needs a key), including whether its models honour the JSON-schema `format` the Learner relies on.
+
+---
+
 ## 11 Nov: Host it on any Docker server, e.g. Coolify (Balaji, `demo-order`)
 
 **Problem:** the only hosting path was Render's blueprint, whose free database is deleted after 30 days, and the team is hosting on its own server with Coolify.

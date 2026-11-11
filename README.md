@@ -169,7 +169,7 @@ Set the variables under Environment Variables, never in a committed file:
 | Variable | Value |
 |---|---|
 | `DATABASE_URL` | `postgresql://...` (Prisma needs this scheme, not `postgresql+asyncpg://`). To share a database with another app, add `?schema=aegis` so Aegis keeps its tables in its own schema |
-| `AEGIS_AI_PROVIDER` + key | e.g. `openrouter` and `OPENROUTER_API_KEY`. Without an AI key the Learner proposes no rules |
+| `AEGIS_AI_PROVIDER` + key | e.g. `openrouter` and `OPENROUTER_API_KEY`, or `ollama` with `OLLAMA_BASE_URL=https://ollama.com`, `OLLAMA_API_KEY` and `OLLAMA_MODEL`. Without an AI model the Learner proposes no rules |
 | `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET` | optional; only for live sandbox calls |
 | `NEXT_PUBLIC_AG_GRID_LICENSE_KEY` | optional build argument |
 
@@ -240,7 +240,7 @@ The seeder deliberately plants one recurring loss shape — high-value orders to
 ```
 prisma/schema.prisma      data model; `source` on every externally-derived row
 src/lib/paypal/           REST client + typed API surface
-src/lib/ai/               provider layer: Anthropic and local Ollama behind one interface
+src/lib/ai/               provider layer: Anthropic, OpenRouter and Ollama (local or cloud) behind one interface
 src/agents/signals.ts     deterministic risk signals (no model)
 src/agents/ev.ts          expected-value engine + evidence checklists (no model)
 src/agents/rules.ts       closed predicate language for prevention rules
@@ -266,6 +266,7 @@ Aegis runs against **either a hosted Claude model or a local model, interchangea
 |---|---|---|
 | **Anthropic** | `anthropic` | `claude-opus-5` for reasoning and drafting, `claude-haiku-5-5` for high-volume explanation passes. Structured output uses a **forced tool call**, so a malformed response fails loudly instead of being parsed out of prose. |
 | **Ollama (local)** | `ollama` | Any instruct model. Structured output uses Ollama's `format` parameter, which **constrains decoding to the JSON Schema** rather than asking politely for JSON, so small models stay on-schema. No API key, no network. |
+| **Ollama (cloud)** | `ollama` | Ollama's hosted models through the same API: set `OLLAMA_BASE_URL=https://ollama.com`, `OLLAMA_API_KEY` and a cloud model such as `deepseek-v4.1-flash`. No GPU needed on the server. |
 | auto | `auto` (default) | Prefers Anthropic when a key is set, falls back to a reachable local Ollama. |
 
 Both implement one interface ([`src/lib/ai/types.ts`](src/lib/ai/types.ts)); the agents never know which is in use.

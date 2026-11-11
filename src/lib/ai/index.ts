@@ -65,7 +65,7 @@ export async function aiStatus(): Promise<AIStatus> {
       fast: null,
       hint:
         choice === "ollama"
-          ? `No Ollama server at ${env().OLLAMA_BASE_URL}. Start it with \`ollama serve\` and pull a model.`
+          ? `No Ollama server at ${env().OLLAMA_BASE_URL}. Start it with \`ollama serve\` and pull a model, or use Ollama's cloud (OLLAMA_BASE_URL=https://ollama.com and OLLAMA_API_KEY).`
           : choice === "anthropic"
             ? "ANTHROPIC_API_KEY is not set."
             : choice === "openrouter"
