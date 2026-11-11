@@ -152,11 +152,35 @@ service, applies the schema, and on first boot loads the offline demo data and r
 `ANTHROPIC_API_KEY` or PayPal sandbox keys in the service's Environment tab to switch on AI drafts or live writes.
 Free Render services sleep when idle, so the first visit can take up to a minute.
 
+### Self-hosted with Docker (Coolify or any Docker host)
+
+The [`Dockerfile`](Dockerfile) builds one container that serves the console and the API (pages, server actions and
+`/api/webhooks/paypal`) on port 3000. Postgres runs separately. Start-up does the same as on Render: apply the schema,
+seed the demo data and run the agents once if the database is empty, then serve.
+
+```bash
+docker build -t aegis .
+docker run -p 3000:3000 -e DATABASE_URL=postgresql://user:pass@host:5432/db aegis
+```
+
+On Coolify: New Resource → Public Repository → this repo, branch `main`, build pack **Dockerfile**, port **3000**.
+Set the variables under Environment Variables, never in a committed file:
+
+| Variable | Value |
+|---|---|
+| `DATABASE_URL` | `postgresql://...` (Prisma needs this scheme, not `postgresql+asyncpg://`). To share a database with another app, add `?schema=aegis` so Aegis keeps its tables in its own schema |
+| `AEGIS_AI_PROVIDER` + key | e.g. `openrouter` and `OPENROUTER_API_KEY`. Without an AI key the Learner proposes no rules |
+| `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET` | optional; only for live sandbox calls |
+| `NEXT_PUBLIC_AG_GRID_LICENSE_KEY` | optional build argument |
+
+The policy defaults (`AEGIS_AUTO_ACCEPT_CEILING_USD=0`, `AEGIS_AUTO_REFUND_CEILING_USD=25`, `AEGIS_HOLD_THRESHOLD=70`)
+apply when those variables are unset.
+
 ### Requirements
 - Node 18+
 - Docker (for Postgres), or any Postgres 14+
-- A PayPal sandbox app: https://developer.paypal.com/dashboard/applications/sandbox
-- An Anthropic API key
+- A PayPal sandbox app (optional): https://developer.paypal.com/dashboard/applications/sandbox
+- Optional: a PayPal sandbox app and an AI key (Anthropic or OpenRouter) or a local Ollama; see [Running without credentials](#running-without-credentials)
 
 ```bash
 git clone <this repo> && cd aegis

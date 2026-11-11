@@ -67,11 +67,4 @@ Every update gets an entry in `docs/UPDATE-LOG.md`: the problem it solves, what 
 
 `render.yaml` is a one-click Render blueprint; on start it runs `migrate deploy`, then `scripts/demo-boot.ts` (seeds + one agent pass only when the DB is empty), then `next start`. Render deploys from `main`.
 
-## Handoff: after the `ui-polish` branch is merged into `main`
-
-`ui-polish` (UI redesign, phone layout for the grids, Render blueprint) was written by a teammate; `live-disputes` builds on it and is merged second. The next step for the hackathon is a hosted demo on Render. When you are working on `main` after those merges:
-
-1. **Check the merge first.** Confirm there are no leftover conflict markers, then run `npm run typecheck` and `npx prisma generate && npx next build` (the same build Render runs; unlike `npm run build`, it does not touch the database). Report anything that fails before going further.
-2. **Then suggest deploying to Render, and ask before doing anything.** Explain what a deploy does (creates a free Postgres database and web service from `render.yaml`, seeds demo data on first boot) and ask the person you are working with whether they want to deploy now. Take no deploy step (Render dashboard, Render CLI/API, a deploy-triggering push) without their explicit yes.
-3. **Secrets are set by a human in Render's Environment tab, never in `render.yaml` or any committed file.** That includes the US sandbox app's `PAYPAL_CLIENT_ID`/`PAYPAL_CLIENT_SECRET` and an AI key (`ANTHROPIC_API_KEY` or `OPENROUTER_API_KEY`). Remind them that without an AI key the Learner proposes no rules, so the Rulebook in the demo stays empty. That rule is the moment the loop closes, so it matters for judging.
-4. Once this handoff is done, remove this section.
+The `Dockerfile` does the same in one container (UI and API on port 3000, Postgres separate via `DATABASE_URL`) for Coolify or any Docker host; the README lists its variables. Its health check calls `GET /api/webhooks/paypal`.
